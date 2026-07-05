@@ -341,6 +341,10 @@ export const htmlContent = ({
 
       if (!window.__MNST__) {
         window.__MNST__ = {
+          // state
+          state: {
+            outlinedElements: [],
+          },
           // constants
           platform: {
             platform: "${platform}",
@@ -474,6 +478,7 @@ export const htmlContent = ({
           return;
         }
         try {
+          clearHighlightOutline();
           __MNST__.highlighter.removeAllHighlights();
           __MNST__.highlighter.deserialize(highlights);
           clearIgnoredElementsBackgroundColors();
@@ -574,6 +579,7 @@ export const htmlContent = ({
             );
             return;
           }
+          clearHighlightOutline();
           __MNST__.highlighter.unhighlightSelection();
           clearIgnoredElementsBackgroundColors();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
@@ -624,6 +630,26 @@ export const htmlContent = ({
           console.error("Failed to get highlights: ", e);
           sendGetHighlights(id, false, undefined, e.message);
         }
+      }
+
+      // @sdk-internal
+      function clearHighlightOutline() {
+        __MNST__.state.outlinedElements.forEach((el) => {
+          el.style.boxShadow = "";
+        });
+        __MNST__.state.outlinedElements = [];
+      }
+
+      // @sdk-internal
+      function outlineHighlightFromElement(element) {
+        const highlight = __MNST__.highlighter.getHighlightForElement(element);
+        if (!highlight) {
+          return;
+        }
+        highlight.getHighlightElements().forEach((el) => {
+          el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
+          __MNST__.state.outlinedElements.push(el);
+        });
       }
 
       // <------------------- Internal utils functions ------------------------>
@@ -738,6 +764,22 @@ export const htmlContent = ({
               __MNST__.selector.cache.range = selection.getRangeAt(0).cloneRange();
             }
             sendOnTextSelectionChange(__MNST__.selector.cache.text);
+          }
+        });
+
+        document.addEventListener("click", function (event) {
+          const highlightNames = ${applierNames};
+          const selector = highlightNames.map((c) => "." + c).join(",");
+          const target = event.target;
+          const node =
+            target && target.closest && selector
+              ? target.closest(selector)
+              : null;
+
+          clearHighlightOutline();
+
+          if (node) {
+            outlineHighlightFromElement(node);
           }
         });
       }
