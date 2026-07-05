@@ -2,7 +2,6 @@ import {
   SelectableTextView,
   HTMLString,
   SelectableTextViewRef,
-  ColorClass,
   CSSString,
   ColorClassName,
   googleFonts,
@@ -19,6 +18,7 @@ import {
 } from "@/components/NotesBottomSheet";
 import Clipboard from "@react-native-clipboard/clipboard";
 import { useToastNotification } from "@/context/ToastNotificationProvider";
+import { colorClasses } from "@/constants/colorClasses";
 
 const guideContent: HTMLString = `
 <article class="content">
@@ -96,6 +96,13 @@ const guideContent: HTMLString = `
         <li><code>clearHighlights()</code> — removes all highlights from the content (left FAB).</li>
         <li><code>getSelectedText()</code> — returns the cached selected text (left FAB).</li>
         <li><code>getHighlights()</code> — returns the serialized highlights string (left FAB).</li>
+        <li>
+          <code>getAllHighlightsData()</code> — returns an array of
+          <code>{ id, colorClassName, text }</code> for every highlight. The left FAB
+          "All Highlights Data" action opens a dedicated screen listing this payload.
+        </li>
+        <li><code>focusHighlight(id)</code> — scrolls to a highlight by id and outlines it (notes sheet "Focus").</li>
+        <li><code>unhighlightById(id)</code> — removes a single highlight by id (notes sheet "Unhighlight").</li>
       </ul>
     </section>
 
@@ -205,14 +212,6 @@ const contentFonts = googleFonts({
   ],
 });
 
-const colorClasses: ColorClass[] = [
-  { name: "highlight-amber", color: "#FDE8A0" },
-  { name: "highlight-coral", color: "#FCAAB8" },
-  { name: "highlight-mint", color: "#A7F0D5" },
-  { name: "highlight-sky", color: "#93C5FD" },
-  { name: "highlight-violet", color: "#C4B5FD" },
-];
-
 export default function MainTest() {
   const selectableTextViewRef = useRef<SelectableTextViewRef>(null);
   const [currentColorClassName, setCurrentColorClassName] =
@@ -315,6 +314,15 @@ export default function MainTest() {
         onClose={() => setVisibleNote(false)}
         highlight={pressedHighlight}
         colorClasses={colorClasses}
+        onFocusHighlight={(id) => {
+          setVisibleNote(false);
+          selectableTextViewRef.current?.focusHighlight(id);
+        }}
+        onUnhighlight={(id) => {
+          selectableTextViewRef.current?.unhighlightById(id);
+          setVisibleNote(false);
+          setPressedHighlight(null);
+        }}
       />
     </SafeAreaView>
   );

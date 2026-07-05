@@ -23,9 +23,11 @@ type NotesBottomSheetProps = {
   highlight: PressedHighlight | null;
   colorClasses: ColorClass[];
   onClose: () => void;
+  onFocusHighlight: (id: string) => void;
+  onUnhighlight: (id: string) => void;
 };
 
-const SHEET_HEIGHT = Math.round(Dimensions.get("window").height * 0.4);
+const SHEET_HEIGHT = 440;
 const ANIMATION_MS = 260;
 
 function formatHighlightText(text: string): string {
@@ -52,6 +54,8 @@ export function NotesBottomSheet({
   highlight,
   colorClasses,
   onClose,
+  onFocusHighlight,
+  onUnhighlight,
 }: NotesBottomSheetProps) {
   const insets = useSafeAreaInsets();
   const [mounted, setMounted] = useState(visible);
@@ -162,6 +166,43 @@ export function NotesBottomSheet({
               multiline
               textAlignVertical="top"
             />
+            {highlight ? (
+              <View style={styles.actionsRow}>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    styles.focusButton,
+                    pressed && styles.actionButtonPressed,
+                  ]}
+                  disabled={!highlight}
+                  onPress={() => highlight && onFocusHighlight(highlight.id)}
+                >
+                  <Text
+                    style={[styles.actionButtonText, styles.focusButtonText]}
+                  >
+                    Focus
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.actionButton,
+                    styles.unhighlightButton,
+                    pressed && styles.actionButtonPressed,
+                  ]}
+                  disabled={!highlight}
+                  onPress={() => highlight && onUnhighlight(highlight.id)}
+                >
+                  <Text
+                    style={[
+                      styles.actionButtonText,
+                      styles.unhighlightButtonText,
+                    ]}
+                  >
+                    Unhighlight
+                  </Text>
+                </Pressable>
+              </View>
+            ) : null}
           </View>
         </Animated.View>
       </View>
@@ -235,5 +276,39 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: "#0F172A",
     backgroundColor: "#F8FAFC",
+  },
+  actionsRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 12,
+  },
+  actionButton: {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+  },
+  actionButtonPressed: {
+    opacity: 0.7,
+  },
+  focusButton: {
+    backgroundColor: "#0F172A",
+    borderColor: "#0F172A",
+  },
+  focusButtonText: {
+    color: "#FFFFFF",
+  },
+  unhighlightButton: {
+    backgroundColor: "#FFFFFF",
+    borderColor: "#E2E8F0",
+  },
+  unhighlightButtonText: {
+    color: "#DC2626",
+  },
+  actionButtonText: {
+    fontSize: 15,
+    fontWeight: "600",
   },
 });

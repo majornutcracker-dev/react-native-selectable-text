@@ -8,6 +8,7 @@ import {
   SelectableTextViewRef,
   Highlights,
   SelectableTextViewError,
+  HighlightData,
 } from "./types";
 import { generatePromiseId, htmlContent } from "./utils";
 import { Linking, Platform } from "react-native";
@@ -91,14 +92,27 @@ const SelectableTextView = React.forwardRef<
           );
         }
         delete promises.current[id];
+      } else if (data.type === BridgingNames.promises.getAllHighlightsData) {
+        const success = data.value.success;
+        const id = data.value.promiseId;
+        const highlightsData = data.value.highlightsData;
+        const error = data.value.error;
+        if (success) {
+          promises.current[id]?.resolve(highlightsData ?? []);
+        } else {
+          promises.current[id]?.reject(
+            new Error(
+              error ?? "Unknown error while getting all highlights data"
+            )
+          );
+        }
+        delete promises.current[id];
       } else if (data.type === BridgingNames.events.log) {
         console.log("Log: ", data.value);
       } else if (data.type === BridgingNames.events.onError) {
         onError?.(data.value as SelectableTextViewError);
       } else if (data.type === BridgingNames.events.onHighlightPressed) {
-        onHighlightPressed?.(
-          data.value as { id: string; colorClassName: string; text: string }
-        );
+        onHighlightPressed?.(data.value as HighlightData);
       }
     },
     [onTextSelectionChange, onHighlightsChange, onError]
@@ -161,6 +175,20 @@ const SelectableTextView = React.forwardRef<
     });
   };
 
+  const focusHighlight = (id: string) => {
+    _postMessage({
+      type: BridgingNames.functions.focusHighlight,
+      value: id,
+    });
+  };
+
+  const unhighlightById = (id: string) => {
+    _postMessage({
+      type: BridgingNames.functions.unhighlightById,
+      value: id,
+    });
+  };
+
   const getSelectedText = async () => {
     return new Promise<string>((resolve, reject) => {
       const id = generatePromiseId();
@@ -201,6 +229,26 @@ const SelectableTextView = React.forwardRef<
     });
   };
 
+  const getAllHighlightsData = async () => {
+    return new Promise<HighlightData[]>((resolve, reject) => {
+      const id = generatePromiseId();
+      promises.current[id] = {
+        resolve,
+        reject,
+      };
+      _postMessage({
+        type: BridgingNames.promises.getAllHighlightsData,
+        value: id,
+      });
+      setTimeout(() => {
+        if (promises.current[id]) {
+          promises.current[id]?.reject(new Error("Timeout"));
+          delete promises.current[id];
+        }
+      }, 2000); // 2 second timeout
+    });
+  };
+
   const _postMessage = (message: Message) => {
     webviewRef.current?.postMessage(JSON.stringify(message));
   };
@@ -211,6 +259,9 @@ const SelectableTextView = React.forwardRef<
     getSelectedText,
     getHighlights,
     clearHighlights,
+    focusHighlight,
+    unhighlightById,
+    getAllHighlightsData,
   }));
 
   return (

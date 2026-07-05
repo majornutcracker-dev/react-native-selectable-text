@@ -1,5 +1,6 @@
 import Clipboard from "@react-native-clipboard/clipboard";
 import { SelectableTextViewRef } from "@majornutcracker/react-native-selectable-text";
+import { useRouter } from "expo-router";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import {
   Alert,
@@ -20,7 +21,11 @@ type ActionsFabProps = {
   selectableTextViewRef: RefObject<SelectableTextViewRef | null>;
 };
 
-type ActionFabIconName = "highlights" | "selection" | "clear-highlights";
+type ActionFabIconName =
+  | "highlights"
+  | "highlights-data"
+  | "selection"
+  | "clear-highlights";
 
 type ActionFabItem = {
   key: string;
@@ -34,6 +39,7 @@ export function ActionsFab(props: ActionsFabProps) {
   const [expanded, setExpanded] = useState(false);
   const expandAnim = useRef(new Animated.Value(0)).current;
   const { showToast } = useToastNotification();
+  const router = useRouter();
 
   const insets = useSafeAreaInsets();
   const bottom = insets.bottom + FAB_BOTTOM;
@@ -57,6 +63,24 @@ export function ActionsFab(props: ActionsFabProps) {
             },
             { text: "OK", style: "cancel" },
           ]);
+        } catch (error) {
+          showToast(error as string);
+        }
+      },
+    },
+    {
+      key: "all-highlights-data",
+      label: "All Highlights Data",
+      tint: "#8B5CF6",
+      icon: "highlights-data",
+      onPress: async () => {
+        try {
+          const data =
+            await props.selectableTextViewRef.current?.getAllHighlightsData();
+          router.push({
+            pathname: "/highlights",
+            params: { data: JSON.stringify(data ?? []) },
+          });
         } catch (error) {
           showToast(error as string);
         }
@@ -267,6 +291,41 @@ function ActionFabIcon(props: { tint: string; icon: ActionFabIconName }) {
     );
   }
 
+  if (props.icon === "highlights-data") {
+    return (
+      <View style={styles.highlightsDataIcon}>
+        <View style={styles.highlightsDataRow}>
+          <View
+            style={[styles.highlightsDataDot, { backgroundColor: props.tint }]}
+          />
+          <View
+            style={[styles.highlightsDataLine, { backgroundColor: props.tint }]}
+          />
+        </View>
+        <View style={styles.highlightsDataRow}>
+          <View
+            style={[styles.highlightsDataDot, { backgroundColor: props.tint }]}
+          />
+          <View
+            style={[
+              styles.highlightsDataLine,
+              styles.highlightsDataLineShort,
+              { backgroundColor: props.tint },
+            ]}
+          />
+        </View>
+        <View style={styles.highlightsDataRow}>
+          <View
+            style={[styles.highlightsDataDot, { backgroundColor: props.tint }]}
+          />
+          <View
+            style={[styles.highlightsDataLine, { backgroundColor: props.tint }]}
+          />
+        </View>
+      </View>
+    );
+  }
+
   if (props.icon === "clear-highlights") {
     return (
       <View style={styles.clearHighlightIcon}>
@@ -403,6 +462,29 @@ const styles = StyleSheet.create({
   highlightIconBarShort: {
     width: "55%",
     alignSelf: "flex-end",
+  },
+  highlightsDataIcon: {
+    width: 18,
+    height: 14,
+    justifyContent: "space-between",
+  },
+  highlightsDataRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  highlightsDataDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 2,
+  },
+  highlightsDataLine: {
+    flex: 1,
+    height: 2.5,
+    borderRadius: 2,
+  },
+  highlightsDataLineShort: {
+    flex: 0.6,
   },
   clearHighlightIcon: {
     width: 18,

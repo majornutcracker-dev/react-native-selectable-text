@@ -24,6 +24,12 @@ export type SelectableTextViewFontFace = {
   unicodeRange?: string;
 };
 
+export type HighlightData = {
+  id: string;
+  colorClassName: string;
+  text: string;
+};
+
 export type GoogleFontFamily = {
   family: string;
   weights?: string;
@@ -92,7 +98,10 @@ export type SelectableTextViewErrorCode =
   | "bridge_message_error"
   | "failed_to_highlight_selection"
   | "failed_to_unhighlight_selection"
-  | "failed_to_clear_highlights";
+  | "failed_to_clear_highlights"
+  | "highlight_not_found"
+  | "failed_to_focus_highlight"
+  | "failed_to_unhighlight_by_id";
 
 export interface SelectableTextViewError extends Error {
   /**
@@ -136,6 +145,23 @@ export type SelectableTextViewRef = {
    * @returns The serialization of the current highlighting
    */
   getHighlights: () => Promise<Highlights>;
+  /**
+   * A function that focuses on a highlight by its id
+   * Scrolls the content to the highlight and focuses on it
+   * @param id
+   */
+  focusHighlight: (id: string) => void;
+  /**
+   * A function that removes a highlight by its id
+   * @param id
+   */
+  unhighlightById: (id: string) => void;
+  /**
+   * A promise that returns all the highlights data
+   * @throws js Error
+   * @returns All the highlights data
+   */
+  getAllHighlightsData: () => Promise<HighlightData[]>;
 };
 
 export type SelectableTextViewPropsBase = {
@@ -220,13 +246,9 @@ export type SelectableTextViewPropsBase = {
    * --> State property
    * Called when a highlight is pressed.
    * The payload includes the id of the highlight, the colorClassName of the highlight and the text of the highlight.
-   * @param highlight { id: string; colorClassName: string; }
+   * @param highlight
    */
-  onHighlightPressed?: (highlight: {
-    id: string;
-    colorClassName: string;
-    text: string;
-  }) => void;
+  onHighlightPressed?: (highlight: HighlightData) => void;
 };
 
 export type Message = {
@@ -241,6 +263,8 @@ export const BridgingNames = {
     highlightSelection: "highlightSelection",
     unhighlightSelection: "unhighlightSelection",
     clearHighlights: "clearHighlights",
+    focusHighlight: "focusHighlight",
+    unhighlightById: "unhighlightById",
   },
   // out
   events: {
@@ -255,6 +279,7 @@ export const BridgingNames = {
   promises: {
     getSelectedText: "getSelectedText",
     getHighlights: "getHighlights",
+    getAllHighlightsData: "getAllHighlightsData",
   },
 };
 

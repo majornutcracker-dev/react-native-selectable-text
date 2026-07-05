@@ -384,6 +384,8 @@ export const htmlContent = ({
           highlightSelection: "highlightSelection",
           unhighlightSelection: "unhighlightSelection",
           clearHighlights: "clearHighlights",
+          focusHighlight: "focusHighlight",
+          unhighlightById: "unhighlightById",
         },
         // out
         events: {
@@ -398,6 +400,7 @@ export const htmlContent = ({
         promises: {
           getSelectedText: "getSelectedText",
           getHighlights: "getHighlights",
+          getAllHighlightsData: "getAllHighlightsData",
         },
       };
 
@@ -411,10 +414,16 @@ export const htmlContent = ({
           unhighlightSelection();
         } else if (type === BridgingNames.functions.clearHighlights) {
           clearHighlights();
+        } else if (type === BridgingNames.functions.focusHighlight) {
+          focusHighlight(value); // id
+        } else if (type === BridgingNames.functions.unhighlightById) {
+          unhighlightById(value); // id
         } else if (type === BridgingNames.promises.getSelectedText) {
           getSelectedText(value); // promiseId
         } else if (type === BridgingNames.promises.getHighlights) {
           getHighlights(value); // promiseId
+        } else if (type === BridgingNames.promises.getAllHighlightsData) {
+          getAllHighlightsData(value); // promiseId
         } else {
           sendOnError(
             "bridge_message_error",
@@ -476,6 +485,16 @@ export const htmlContent = ({
           promiseId,
           success,
           highlights,
+          error,
+        });
+      }
+
+      // @native-promise-resolve
+      function sendGetAllHighlightsData(promiseId, success, highlightsData, error) {
+        postMessage(BridgingNames.promises.getAllHighlightsData, {
+          promiseId,
+          success,
+          highlightsData,
           error,
         });
       }
@@ -617,6 +636,72 @@ export const htmlContent = ({
         }
       }
 
+      // @sdk-internal
+      function findHighlightById(id) {
+        const highlights = __MNST__.highlighter.highlights || [];
+        for (let i = 0; i < highlights.length; i++) {
+          if (String(highlights[i].id) === String(id)) {
+            return highlights[i];
+          }
+        }
+        return null;
+      }
+
+      // @sdk-internal-with-event
+      function focusHighlight(id) {
+        try {
+          const highlight = findHighlightById(id);
+          if (!highlight) {
+            sendOnError(
+              "highlight_not_found",
+              "Highlight not found",
+              "No highlight registered for id: " + String(id)
+            );
+            return;
+          }
+          clearHighlightOutline();
+          const elements = highlight.getHighlightElements();
+          elements.forEach((el) => {
+            el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
+            __MNST__.state.outlinedElements.push(el);
+          });
+          if (elements.length > 0 && elements[0].scrollIntoView) {
+            elements[0].scrollIntoView({ behavior: "smooth", block: "center" });
+          }
+        } catch (e) {
+          sendOnError(
+            "failed_to_focus_highlight",
+            "Failed to focus highlight",
+            e?.message ?? String(e)
+          );
+        }
+      }
+
+      // @sdk-internal-with-event
+      function unhighlightById(id) {
+        try {
+          const highlight = findHighlightById(id);
+          if (!highlight) {
+            sendOnError(
+              "highlight_not_found",
+              "Highlight not found",
+              "No highlight registered for id: " + String(id)
+            );
+            return;
+          }
+          clearHighlightOutline();
+          __MNST__.highlighter.removeHighlights([highlight]);
+          clearIgnoredElementsBackgroundColors();
+          sendOnHighlightChange(__MNST__.highlighter.serialize());
+        } catch (e) {
+          sendOnError(
+            "failed_to_unhighlight_by_id",
+            "Failed to unhighlight by id",
+            e?.message ?? String(e)
+          );
+        }
+      }
+
       // @sdk-internal-with-resolve
       function getSelectedText(id) {
         try {
@@ -639,6 +724,22 @@ export const htmlContent = ({
         } catch (e) {
           console.error("Failed to get highlights: ", e);
           sendGetHighlights(id, false, undefined, e.message);
+        }
+      }
+
+      // @sdk-internal-with-resolve
+      function getAllHighlightsData(id) {
+        try {
+          const highlights = __MNST__.highlighter.highlights || [];
+          const data = highlights.map((h) => ({
+            id: String(h.id),
+            colorClassName: h.classApplier.className,
+            text: h.getText ? h.getText() : "",
+          }));
+          sendGetAllHighlightsData(id, true, data, undefined);
+        } catch (e) {
+          console.error("Failed to get all highlights data: ", e);
+          sendGetAllHighlightsData(id, false, undefined, e.message);
         }
       }
 
