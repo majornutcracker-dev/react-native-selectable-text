@@ -155,11 +155,11 @@ const cssContent: CSSString = `
 const TEST_HIGHLIGHTS = `type:textContent|112$183$14$highlight-mint$|309$328$16$highlight-violet$|406$460$15$highlight-sky$`;
 
 const colorClasses: ColorClass[] = [
-  { name: "highlight-amber", color: "#FCD34D" },
-  { name: "highlight-coral", color: "#FB7185" },
-  { name: "highlight-mint", color: "#6EE7B7" },
-  { name: "highlight-sky", color: "#60A5FA" },
-  { name: "highlight-violet", color: "#A78BFA" },
+  { name: "highlight-amber", color: "#FDE8A0" },
+  { name: "highlight-coral", color: "#FCAAB8" },
+  { name: "highlight-mint", color: "#A7F0D5" },
+  { name: "highlight-sky", color: "#93C5FD" },
+  { name: "highlight-violet", color: "#C4B5FD" },
 ];
 
 export default function MainTest() {

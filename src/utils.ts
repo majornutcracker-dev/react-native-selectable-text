@@ -22,15 +22,6 @@ export function generatePromiseId(): string {
   return id;
 }
 
-function createIgnoredElementsCss(ignoredElements: string[]): string {
-  return ignoredElements
-    .map(
-      (element) =>
-        `${element} { -webkit-user-select: none; user-select: none; }`
-    )
-    .join("\n");
-}
-
 function uniqueByName(list: ColorClass[]): ColorClass[] {
   const map = new Map<string, ColorClass>();
 
@@ -88,9 +79,6 @@ export const htmlContent = ({
   const highlighterOptions = JSON.stringify({
     ignoreWhiteSpace: ho?.ignoreWhiteSpace ?? true,
   });
-  const ignoredElementsCss = createIgnoredElementsCss(
-    ho?.ignoredElements ?? ["a", "sup", "sub"]
-  );
   const ignoredElementsString = (
     ho?.ignoredElements ?? ["a", "sup", "sub"]
   ).join(", ");
@@ -130,7 +118,6 @@ export const htmlContent = ({
         padding: 0;
         width: 100%;
       }
-      ${ignoredElementsCss}
       ${colorClassesStyle}
     </style>
   </head>
