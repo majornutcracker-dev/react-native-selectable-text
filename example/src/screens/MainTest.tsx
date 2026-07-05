@@ -11,7 +11,12 @@ import { useRef, useState } from "react";
 import { Linking, StyleSheet, Text, View, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActionsFab } from "@/components/ActionsFab";
+import { BottomSheetFab } from "@/components/BottomSheetFab";
 import { ColorFab } from "@/components/ColorFab";
+import {
+  NotesBottomSheet,
+  type PressedHighlight,
+} from "@/components/NotesBottomSheet";
 import Clipboard from "@react-native-clipboard/clipboard";
 import { useToastNotification } from "@/context/ToastNotificationProvider";
 
@@ -74,6 +79,11 @@ const guideContent: HTMLString = `
           <code>details</code>). Shown here as a toast; try highlighting over an existing highlight
           for <code>overlapping_highlight</code>, or highlight with no selection for
           <code>empty_selection</code>.
+        </li>
+        <li>
+          <code>onHighlightPressed</code> — fired when a highlight is tapped. Payload:
+          <code>id</code>, <code>colorClassName</code>, and <code>text</code>. In this demo it opens
+          the notes sheet; tap any existing highlight to try it.
         </li>
       </ul>
     </section>
@@ -208,6 +218,9 @@ export default function MainTest() {
   const [currentColorClassName, setCurrentColorClassName] =
     useState<ColorClassName>(colorClasses[0].name);
   const { showToast } = useToastNotification();
+  const [visibleNote, setVisibleNote] = useState(false);
+  const [pressedHighlight, setPressedHighlight] =
+    useState<PressedHighlight | null>(null);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -283,14 +296,25 @@ export default function MainTest() {
           onError={(error) => {
             showToast(error.message);
           }}
+          onHighlightPressed={(highlight) => {
+            setPressedHighlight(highlight);
+            setVisibleNote(true);
+          }}
         />
       </Group>
       <View style={styles.fabSpace} />
       <ActionsFab selectableTextViewRef={selectableTextViewRef} />
+      <BottomSheetFab onPress={() => setVisibleNote(true)} />
       <ColorFab
         colorClasses={colorClasses}
         currentColorClassName={currentColorClassName}
         setCurrentColorClassName={setCurrentColorClassName}
+      />
+      <NotesBottomSheet
+        visible={visibleNote}
+        onClose={() => setVisibleNote(false)}
+        highlight={pressedHighlight}
+        colorClasses={colorClasses}
       />
     </SafeAreaView>
   );

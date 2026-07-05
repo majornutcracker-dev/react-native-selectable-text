@@ -1,0 +1,239 @@
+import { ColorClass } from "@majornutcracker/react-native-selectable-text";
+import { useEffect, useRef, useState } from "react";
+import {
+  Animated,
+  Dimensions,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+export type PressedHighlight = {
+  id: string;
+  colorClassName: string;
+  text: string;
+};
+
+type NotesBottomSheetProps = {
+  visible: boolean;
+  highlight: PressedHighlight | null;
+  colorClasses: ColorClass[];
+  onClose: () => void;
+};
+
+const SHEET_HEIGHT = Math.round(Dimensions.get("window").height * 0.4);
+const ANIMATION_MS = 260;
+
+function formatHighlightText(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function HighlightHandle(props: { color: string }) {
+  return (
+    <View style={[styles.handleContainer, { backgroundColor: props.color }]}>
+      <View
+        style={[
+          styles.handleBar,
+          {
+            backgroundColor: props.color === "#ffffff" ? "#000000" : "#ffffff",
+          },
+        ]}
+      />
+    </View>
+  );
+}
+
+export function NotesBottomSheet({
+  visible,
+  highlight,
+  colorClasses,
+  onClose,
+}: NotesBottomSheetProps) {
+  const insets = useSafeAreaInsets();
+  const [mounted, setMounted] = useState(visible);
+  const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const highlightColor =
+    colorClasses.find((c) => c.name === highlight?.colorClassName)?.color ??
+    "#ffffff";
+  const formattedText = highlight ? formatHighlightText(highlight.text) : "";
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      slideAnim.setValue(SHEET_HEIGHT);
+      fadeAnim.setValue(0);
+      Animated.parallel([
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: ANIMATION_MS,
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: ANIMATION_MS,
+          useNativeDriver: true,
+        }),
+      ]).start();
+      return;
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    Animated.parallel([
+      Animated.timing(slideAnim, {
+        toValue: SHEET_HEIGHT,
+        duration: ANIMATION_MS,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: ANIMATION_MS,
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) {
+        setMounted(false);
+      }
+    });
+  }, [visible, mounted, slideAnim, fadeAnim]);
+
+  if (!mounted) {
+    return null;
+  }
+
+  return (
+    <Modal
+      transparent
+      visible={mounted}
+      animationType="none"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={styles.root}>
+        <Pressable style={styles.backdropPressable} onPress={onClose}>
+          <Animated.View
+            style={[
+              styles.backdrop,
+              {
+                opacity: fadeAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0, 0.45],
+                }),
+              },
+            ]}
+          />
+        </Pressable>
+
+        <Animated.View
+          style={[
+            styles.sheet,
+            {
+              height: SHEET_HEIGHT,
+              paddingBottom: insets.bottom,
+              transform: [{ translateY: slideAnim }],
+            },
+          ]}
+        >
+          <HighlightHandle color={highlightColor} />
+          <View style={styles.content}>
+            <Text style={styles.label}>Highlight ID</Text>
+            <Text style={styles.metaValue}>
+              {highlight?.id ?? "Select a highlight in the content"}
+            </Text>
+
+            <Text style={styles.label}>Highlighted text</Text>
+            <Text style={styles.highlightText} numberOfLines={3}>
+              {formattedText || "No highlight selected yet"}
+            </Text>
+
+            <Text style={styles.label}>Note</Text>
+            <TextInput
+              style={styles.noteInput}
+              placeholder="Write a note for this highlight..."
+              placeholderTextColor="#94A3B8"
+              multiline
+              textAlignVertical="top"
+            />
+          </View>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+  backdropPressable: {
+    ...StyleSheet.absoluteFill,
+  },
+  backdrop: {
+    flex: 1,
+    backgroundColor: "#000000",
+  },
+  sheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: "hidden",
+  },
+  handleContainer: {
+    alignItems: "center",
+    paddingTop: 10,
+    paddingBottom: 6,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+  },
+  handleBar: {
+    width: 56,
+    height: 5,
+    borderRadius: 999,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 24,
+    gap: 8,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#64748B",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+    marginTop: 4,
+  },
+  metaValue: {
+    fontSize: 14,
+    color: "#0F172A",
+    fontVariant: ["tabular-nums"],
+  },
+  highlightText: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#1E293B",
+  },
+  noteInput: {
+    minHeight: 120,
+    marginTop: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 12,
+    fontSize: 15,
+    lineHeight: 22,
+    color: "#0F172A",
+    backgroundColor: "#F8FAFC",
+  },
+});

@@ -33,6 +33,7 @@ const SelectableTextView = React.forwardRef<
     onTextSelectionChange,
     onHighlightsChange,
     onError,
+    onHighlightPressed,
     webViewProps,
   } = props;
   const promises = React.useRef<{
@@ -94,6 +95,10 @@ const SelectableTextView = React.forwardRef<
         console.log("Log: ", data.value);
       } else if (data.type === BridgingNames.events.onError) {
         onError?.(data.value as SelectableTextViewError);
+      } else if (data.type === BridgingNames.events.onHighlightPressed) {
+        onHighlightPressed?.(
+          data.value as { id: string; colorClassName: string; text: string }
+        );
       }
     },
     [onTextSelectionChange, onHighlightsChange, onError]

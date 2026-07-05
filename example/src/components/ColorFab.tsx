@@ -169,12 +169,12 @@ function ColorSwatch(props: {
 
 const styles = StyleSheet.create({
   fabRoot: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 100,
     elevation: 100,
   },
   fabBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: "rgba(15, 23, 42, 0.18)",
   },
   colorFabStack: {

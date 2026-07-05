@@ -216,6 +216,17 @@ export type SelectableTextViewPropsBase = {
    * @param error
    */
   onError?: (error: SelectableTextViewError) => void;
+  /**
+   * --> State property
+   * Called when a highlight is pressed.
+   * The payload includes the id of the highlight, the colorClassName of the highlight and the text of the highlight.
+   * @param highlight { id: string; colorClassName: string; }
+   */
+  onHighlightPressed?: (highlight: {
+    id: string;
+    colorClassName: string;
+    text: string;
+  }) => void;
 };
 
 export type Message = {
@@ -236,6 +247,7 @@ export const BridgingNames = {
     onTextSelectionChange: "onTextSelectionChange",
     onHighlightsChange: "onHighlightsChange",
     onError: "onError",
+    onHighlightPressed: "onHighlightPressed",
     // dev
     log: "log",
   },

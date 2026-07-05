@@ -390,6 +390,7 @@ export const htmlContent = ({
           onTextSelectionChange: "onTextSelectionChange",
           onHighlightsChange: "onHighlightsChange",
           onError: "onError",
+          onHighlightPressed: "onHighlightPressed",
           // dev
           log: "log",
         },
@@ -447,6 +448,15 @@ export const htmlContent = ({
           code,
           message,
           details,
+        });
+      }
+
+      // @native-event
+      function sendOnHighlightPressed(highlights, text) {
+        postMessage(BridgingNames.events.onHighlightPressed, {
+          id: highlights.id,
+          colorClassName: highlights.classApplier.className,
+          text: text ?? "",
         });
       }
 
@@ -640,16 +650,19 @@ export const htmlContent = ({
         __MNST__.state.outlinedElements = [];
       }
 
-      // @sdk-internal
+      // @sdk-internal-with-event
       function outlineHighlightFromElement(element) {
         const highlight = __MNST__.highlighter.getHighlightForElement(element);
         if (!highlight) {
           return;
         }
+        let text = "";
         highlight.getHighlightElements().forEach((el) => {
+          text += el.textContent ?? "";
           el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
           __MNST__.state.outlinedElements.push(el);
-        });
+          });
+        sendOnHighlightPressed(highlight, text);
       }
 
       // <------------------- Internal utils functions ------------------------>
