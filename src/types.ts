@@ -41,6 +41,34 @@ export type SelectableTextViewOptions = {
   maximumScale?: number;
 };
 
+export type SelectableTextViewErrorCode =
+  | "unknown"
+  | "overlapping_highlight"
+  | "empty_selection"
+  | "invalid_range"
+  | "invalid_class_applier"
+  | "invalid_highlight"
+  | "initialization_error"
+  | "bridge_message_error"
+  | "failed_to_highlight_selection"
+  | "failed_to_unhighlight_selection"
+  | "failed_to_clear_highlights";
+
+export interface SelectableTextViewError extends Error {
+  /**
+   * A detailed description of the error
+   */
+  details?: string;
+  /**
+   * A message describing the error
+   */
+  message: string;
+  /**
+   * A code describing the error
+   */
+  code: SelectableTextViewErrorCode;
+}
+
 export type SelectableTextViewRef = {
   /**
    * A function that applies highlighting to the current selection with a colorClassName previously defined in the colorClasses property;
@@ -58,13 +86,13 @@ export type SelectableTextViewRef = {
   clearHighlights: () => void;
   /**
    * A promise that returns the selected text
-   * @throws
+   * @throws js Error
    * @returns The selected text
    */
   getSelectedText: () => Promise<string>;
   /**
    * A promise that returns the serialization of the current highlighting
-   * @throws
+   * @throws js Error
    * @returns The serialization of the current highlighting
    */
   getHighlights: () => Promise<Highlights>;
@@ -136,6 +164,14 @@ export type SelectableTextViewPropsBase = {
    * @param selectedText
    */
   onHighlightsChange?: (highlights: Highlights) => void;
+  /**
+   * --> State property
+   * A callback function that will be called when an error occurs in webview internal operations.
+   * The callback will receive the custom error as a parameter.
+   * You can use this callback to perform any action you want when an error occurs.
+   * @param error
+   */
+  onError?: (error: SelectableTextViewError) => void;
 };
 
 export type Message = {
@@ -155,6 +191,7 @@ export const BridgingNames = {
   events: {
     onTextSelectionChange: "onTextSelectionChange",
     onHighlightsChange: "onHighlightsChange",
+    onError: "onError",
     // dev
     log: "log",
   },

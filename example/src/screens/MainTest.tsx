@@ -12,6 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ActionsFab } from "@/components/ActionsFab";
 import { ColorFab } from "@/components/ColorFab";
 import Clipboard from "@react-native-clipboard/clipboard";
+import { useToastNotification } from "@/context/ToastNotificationProvider";
 
 const guideContent: HTMLString = `
 <article class="content">
@@ -171,6 +172,7 @@ export default function MainTest() {
   const selectableTextViewRef = useRef<SelectableTextViewRef>(null);
   const [currentColorClassName, setCurrentColorClassName] =
     useState<ColorClassName>(colorClasses[0].name);
+  const { showToast } = useToastNotification();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -241,6 +243,9 @@ export default function MainTest() {
           }}
           onHighlightsChange={(highlights) => {
             console.log("highlights", highlights);
+          }}
+          onError={(error) => {
+            showToast(error.message);
           }}
         />
       </Group>

@@ -7,6 +7,7 @@ import {
   SelectableTextViewPropsBase,
   SelectableTextViewRef,
   Highlights,
+  SelectableTextViewError,
 } from "./types";
 import { generatePromiseId, htmlContent } from "./utils";
 import { Linking, Platform } from "react-native";
@@ -30,6 +31,7 @@ const SelectableTextView = React.forwardRef<
     onLink,
     onTextSelectionChange,
     onHighlightsChange,
+    onError,
     webViewProps,
   } = props;
   const promises = React.useRef<{
@@ -88,9 +90,11 @@ const SelectableTextView = React.forwardRef<
         delete promises.current[id];
       } else if (data.type === BridgingNames.events.log) {
         console.log("Log: ", data.value);
+      } else if (data.type === BridgingNames.events.onError) {
+        onError?.(data.value as SelectableTextViewError);
       }
     },
-    [onTextSelectionChange, onHighlightsChange]
+    [onTextSelectionChange, onHighlightsChange, onError]
   );
 
   const handleShouldStartLoadWithRequest = React.useCallback(

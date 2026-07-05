@@ -182,64 +182,6 @@ export const htmlContent = ({
         };
       }
 
-      // Bootstrap
-      if (!window.__MNST__init) {
-        window.__MNST__init = true;
-
-        try {
-          const applierNames = ${applierNames};
-          const highlighterOptions = { ignoreWhiteSpace: true };
-          applierNames.forEach((name) => {
-            __MNST__.highlighter.addClassApplier(
-              rangy.createClassApplier(name, {
-                ignoreWhiteSpace: highlighterOptions.ignoreWhiteSpace ?? true,
-                elementTagName: "span",
-              })
-            );
-          });
-        } catch (e) {
-          console.error("Failed to update class appliers: ", e);
-        }
-
-        updateHighlights(${JSON.stringify(highlights ?? "")});
-
-        if (__MNST__.platform.isAndroid) {
-          document.addEventListener("message", function (event) {
-            try {
-              const data = JSON.parse(event.data);
-              onMessage(data.type, data.value);
-            } catch (e) {
-              console.error("Error parsing message: ", e);
-            }
-          });
-        } else {
-          window.addEventListener("message", function (event) {
-            try {
-              const data = JSON.parse(event.data);
-              onMessage(data.type, data.value);
-            } catch (e) {
-              console.error("Error parsing message: ", e);
-            }
-          });
-        }
-
-        document.addEventListener("selectionchange", function (e) {
-          e.preventDefault();
-          const selection = __MNST__.selector.getSelected();
-          if (!selection || selection.toString().trim() === "") {
-            __MNST__.selector.cache.text = "";
-            __MNST__.selector.cache.range = null;
-            sendOnTextSelectionChange("");
-          } else {
-            __MNST__.selector.cache.text = selection.toString();
-            if (selection.rangeCount > 0) {
-              __MNST__.selector.cache.range = selection.getRangeAt(0).cloneRange();
-            }
-            sendOnTextSelectionChange(__MNST__.selector.cache.text);
-          }
-        });
-      }
-
       // <------------------------------ Bridging ----------------------------------->
       const BridgingNames = {
         // in
@@ -253,6 +195,7 @@ export const htmlContent = ({
         events: {
           onTextSelectionChange: "onTextSelectionChange",
           onHighlightsChange: "onHighlightsChange",
+          onError: "onError",
           // dev
           log: "log",
         },
@@ -277,6 +220,12 @@ export const htmlContent = ({
           getSelectedText(value); // promiseId
         } else if (type === BridgingNames.promises.getHighlights) {
           getHighlights(value); // promiseId
+        } else {
+          sendOnError(
+            "bridge_message_error",
+            "Unknown bridge message type",
+            String(type)
+          );
         }
       }
 
@@ -296,6 +245,15 @@ export const htmlContent = ({
       // @native-event
       function sendOnHighlightChange(highlights) {
         postMessage(BridgingNames.events.onHighlightsChange, highlights);
+      }
+
+      // @native-event
+      function sendOnError(code, message, details) {
+        postMessage(BridgingNames.events.onError, {
+          code,
+          message,
+          details,
+        });
       }
 
       // @native-promise-resolve
@@ -331,7 +289,11 @@ export const htmlContent = ({
           clearIgnoredElementsBackgroundColors();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
-          console.error("Failed to restore highlights: ", e);
+          sendOnError(
+            "invalid_highlight",
+            "Failed to restore highlights",
+            e?.message ?? String(e)
+          );
         }
       }
 
@@ -339,15 +301,44 @@ export const htmlContent = ({
       function highlightSelection(classApplierName) {
         try {
           const highlightNames = ${applierNames}
+          if (!highlightNames.includes(classApplierName)) {
+            sendOnError(
+              "invalid_class_applier",
+              "Unknown highlight class applier",
+              "No class applier registered for: " + classApplierName
+            );
+            return;
+          }
+          if (!__MNST__.selector.cache.range) {
+            sendOnError(
+              "invalid_range",
+              "No selection to highlight",
+              "The cached selection range is missing"
+            );
+            return;
+          }
           const selector = highlightNames.map((c) => "."+c).join(",")
           const sel = document.getSelection();
           sel.removeAllRanges();
           sel.addRange(__MNST__.selector.cache.range);
           const range = sel.getRangeAt(0);
+          if (range.collapsed) {
+            sendOnError(
+              "empty_selection",
+              "No selection to highlight",
+              "The selection range is collapsed"
+            );
+            return;
+          }
           const hasHighlightedNode = Array.from(
             document.querySelectorAll(selector)
           ).some(node => range.intersectsNode(node))
           if (hasHighlightedNode) {
+            sendOnError(
+              "overlapping_highlight", 
+              "Overlapping highlight detected", 
+              "The highlight intersects with a node that is already highlighted"
+            );
             return
           }
           const rangySel = rangy.getSelection();
@@ -362,24 +353,46 @@ export const htmlContent = ({
             sendOnHighlightChange(__MNST__.highlighter.serialize());
           }
         } catch (e) {
-          console.error("Failed to highlight selection", e);
+          sendOnError(
+            "failed_to_highlight_selection",
+            "Failed to highlight selection",
+            e?.message ?? String(e)
+          );
         }
       }
 
       // @sdk-internal-with-event
       function unhighlightSelection() {
         try {
+          if (!__MNST__.selector.cache.range) {
+            sendOnError(
+              "invalid_range",
+              "No selection to unhighlight",
+              "The cached selection range is missing"
+            );
+            return;
+          }
           const sel = document.getSelection();
           sel.removeAllRanges();
           sel.addRange(__MNST__.selector.cache.range);
           const rangySel = rangy.getSelection();
-          if (!rangySel.isCollapsed) {
-            __MNST__.highlighter.unhighlightSelection();
-            clearIgnoredElementsBackgroundColors();
-            sendOnHighlightChange(__MNST__.highlighter.serialize());
+          if (rangySel.isCollapsed) {
+            sendOnError(
+              "empty_selection",
+              "No selection to unhighlight",
+              "The selection range is collapsed"
+            );
+            return;
           }
+          __MNST__.highlighter.unhighlightSelection();
+          clearIgnoredElementsBackgroundColors();
+          sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
-          console.error("Failed to unhighlight selection: ", e);
+          sendOnError(
+            "failed_to_unhighlight_selection",
+            "Failed to unhighlight selection",
+            e?.message ?? String(e)
+          );
         }
       }
       
@@ -390,7 +403,11 @@ export const htmlContent = ({
           clearIgnoredElementsBackgroundColors();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
-          console.error("Failed to clear highlights: ", e);
+          sendOnError(
+            "failed_to_clear_highlights",
+            "Failed to clear highlights",
+            e?.message ?? String(e)
+          );
         }
       }
 
@@ -463,6 +480,76 @@ export const htmlContent = ({
             e.message ?? "Unknown error while stringifying message for logging"
           );
         }
+      }
+
+      // <------------------------ Bootstrap ----------------------------------->
+      if (!window.__MNST__init) {
+        window.__MNST__init = true;
+
+        try {
+          const applierNames = ${applierNames};
+          const highlighterOptions = { ignoreWhiteSpace: true };
+          applierNames.forEach((name) => {
+            __MNST__.highlighter.addClassApplier(
+              rangy.createClassApplier(name, {
+                ignoreWhiteSpace: highlighterOptions.ignoreWhiteSpace ?? true,
+                elementTagName: "span",
+              })
+            );
+          });
+        } catch (e) {
+          sendOnError(
+            "initialization_error",
+            "Failed to initialize highlight class appliers",
+            e?.message ?? String(e)
+          );
+        }
+
+        updateHighlights(${JSON.stringify(highlights ?? "")});
+
+        if (__MNST__.platform.isAndroid) {
+          document.addEventListener("message", function (event) {
+            try {
+              const data = JSON.parse(event.data);
+              onMessage(data.type, data.value);
+            } catch (e) {
+              sendOnError(
+                "bridge_message_error",
+                "Failed to parse bridge message",
+                e?.message ?? String(e)
+              );
+            }
+          });
+        } else {
+          window.addEventListener("message", function (event) {
+            try {
+              const data = JSON.parse(event.data);
+              onMessage(data.type, data.value);
+            } catch (e) {
+              sendOnError(
+                "bridge_message_error",
+                "Failed to parse bridge message",
+                e?.message ?? String(e)
+              );
+            }
+          });
+        }
+
+        document.addEventListener("selectionchange", function (e) {
+          e.preventDefault();
+          const selection = __MNST__.selector.getSelected();
+          if (!selection || selection.toString().trim() === "") {
+            __MNST__.selector.cache.text = "";
+            __MNST__.selector.cache.range = null;
+            sendOnTextSelectionChange("");
+          } else {
+            __MNST__.selector.cache.text = selection.toString();
+            if (selection.rangeCount > 0) {
+              __MNST__.selector.cache.range = selection.getRangeAt(0).cloneRange();
+            }
+            sendOnTextSelectionChange(__MNST__.selector.cache.text);
+          }
+        });
       }
 
       true;

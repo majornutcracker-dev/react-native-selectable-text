@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useToastNotification } from "@/context/ToastNotificationProvider";
 
 const FAB_ITEM_SIZE = 44;
 const FAB_ITEM_GAP = 12;
@@ -32,6 +33,7 @@ type ActionFabItem = {
 export function ActionsFab(props: ActionsFabProps) {
   const [expanded, setExpanded] = useState(false);
   const expandAnim = useRef(new Animated.Value(0)).current;
+  const { showToast } = useToastNotification();
 
   const insets = useSafeAreaInsets();
   const bottom = insets.bottom + FAB_BOTTOM;
@@ -56,7 +58,7 @@ export function ActionsFab(props: ActionsFabProps) {
             { text: "OK", style: "cancel" },
           ]);
         } catch (error) {
-          Alert.alert("Error", error as string);
+          showToast(error as string);
         }
       },
     },
@@ -71,7 +73,7 @@ export function ActionsFab(props: ActionsFabProps) {
             await props.selectableTextViewRef.current?.getSelectedText();
           Alert.alert("Selected Text", JSON.stringify(selectedText));
         } catch (error) {
-          Alert.alert("Error", error as string);
+          showToast(error as string);
         }
       },
     },
