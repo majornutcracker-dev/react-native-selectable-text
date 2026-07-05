@@ -78,6 +78,9 @@ export type SelectableTextViewOptions = {
   maximumScale?: number;
 };
 
+/**
+ * Error codes emitted by the WebView SDK via {@link SelectableTextViewPropsBase.onError}.
+ */
 export type SelectableTextViewErrorCode =
   | "unknown"
   | "overlapping_highlight"
@@ -172,8 +175,7 @@ export type SelectableTextViewPropsBase = {
   fonts?: SelectableTextViewFonts;
   /**
    * --> Final property
-   * A rangy highlighter and classApplier options object.
-   * A object which represents the available highlighter options
+   * Rangy highlighter options. See {@link HighlighterOptions}.
    */
   highlighterOptions?: HighlighterOptions;
   /**
@@ -202,17 +204,15 @@ export type SelectableTextViewPropsBase = {
   onTextSelectionChange?: (selectedText: string) => void;
   /**
    * --> State property
-   * A callback function that will be called when the highlights changes.
-   * The callback will receive the currently highlights as a parameter.
-   * You can use this callback to perform any action you want when the highlights changes.
-   * @param selectedText
+   * Called when the serialized highlights change.
+   * @param highlights
    */
   onHighlightsChange?: (highlights: Highlights) => void;
   /**
    * --> State property
-   * A callback function that will be called when an error occurs in webview internal operations.
-   * The callback will receive the custom error as a parameter.
-   * You can use this callback to perform any action you want when an error occurs.
+   * Called when an error occurs inside the WebView SDK (highlight restore, bridge, selection, etc.).
+   * The payload includes {@link SelectableTextViewError.code}, {@link SelectableTextViewError.message},
+   * and optional {@link SelectableTextViewError.details}.
    * @param error
    */
   onError?: (error: SelectableTextViewError) => void;

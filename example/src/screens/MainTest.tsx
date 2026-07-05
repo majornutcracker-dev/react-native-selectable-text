@@ -46,9 +46,19 @@ const guideContent: HTMLString = `
         <dd>Optional serialized state to restore highlights when the screen remounts.</dd>
         <dt><code>highlighterOptions</code></dt>
         <dd>
-          <code>overlapping</code>, <code>ignoreWhiteSpace</code>, and
-          <code>ignoredElements</code> (tags or classes such as <code>a</code>, <code>sup</code>, <code>.ignored</code>).
-          Ignored nodes skip the visible highlight; they remain selectable and copyable.
+          <code>ignoredElements</code> — tags or classes such as <code>a</code>,
+          <code>sup</code>, <code>.ignored</code>. Ignored nodes skip the visible highlight;
+          they remain selectable and copyable.
+        </dd>
+        <dt><code>options</code></dt>
+        <dd>
+          Viewport zoom: <code>userScalable</code>, <code>initialScale</code>,
+          <code>maximumScale</code>. This demo disables pinch zoom.
+        </dd>
+        <dt><code>webViewProps</code></dt>
+        <dd>
+          Pass-through to <code>react-native-webview</code>; here used for the custom
+          Highlight / Unhighlight / Copy menu.
         </dd>
       </dl>
     </section>
@@ -59,6 +69,12 @@ const guideContent: HTMLString = `
         <li><code>onTextSelectionChange</code> — logs the current selection (see Metro).</li>
         <li><code>onHighlightsChange</code> — logs the serialized highlight payload after each change.</li>
         <li><code>onLink</code> — handles link taps; try the sample link in the section below.</li>
+        <li>
+          <code>onError</code> — WebView SDK errors (<code>code</code>, <code>message</code>,
+          <code>details</code>). Shown here as a toast; try highlighting over an existing highlight
+          for <code>overlapping_highlight</code>, or highlight with no selection for
+          <code>empty_selection</code>.
+        </li>
       </ul>
     </section>
 
@@ -171,8 +187,6 @@ const cssContent: CSSString = `
   padding-left: 0.75rem;
 }
 `;
-
-const TEST_HIGHLIGHTS = `type:textContent|112$183$14$highlight-mint$|309$328$16$highlight-violet$|406$460$15$highlight-sky$`;
 
 const contentFonts = googleFonts({
   families: [
