@@ -27,7 +27,8 @@ export type HighlighterOptions = {
    */
   ignoreWhiteSpace?: boolean;
   /**
-   * A list of tag or classes to avoid on selection (e.g., 'a', '.no-select' )
+   * CSS selectors for elements excluded from visible highlights (e.g., 'a', '.ignored').
+   * Text inside ignored elements remains selectable and copyable.
    * @default ['a','sub','sup']
    */
   ignoredElements?: string[];

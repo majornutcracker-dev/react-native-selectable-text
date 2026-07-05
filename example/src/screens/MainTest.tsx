@@ -38,7 +38,8 @@ const guideContent: HTMLString = `
         <dt><code>highlighterOptions</code></dt>
         <dd>
           <code>overlapping</code>, <code>ignoreWhiteSpace</code>, and
-          <code>ignoredElements</code> (tags or classes such as <code>a</code>, <code>sup</code>, <code>.no-select</code>).
+          <code>ignoredElements</code> (tags or classes such as <code>a</code>, <code>sup</code>, <code>.ignored</code>).
+          Ignored nodes skip the visible highlight; they remain selectable and copyable.
         </dd>
       </dl>
     </section>
@@ -67,13 +68,13 @@ const guideContent: HTMLString = `
       <h2 id="ignored">Ignored elements</h2>
       <p>
         Default ignored tags: <code>a</code>, <code>sup</code>, <code>sub</code>, plus headings in this demo.
-        Select across normal text and these nodes — highlights should skip them visually.
+        Select across normal text and these nodes — the visible highlight skips them, but the text stays selectable and copyable.
       </p>
       <p>
         Chemistry sample: H<sub>2</sub>O and E = mc<sup>2</sup> inside a longer sentence for cross-selection tests.
       </p>
-      <p class="no-select">
-        This paragraph uses <code>.no-select</code> and should not receive a visible highlight.
+      <p class="ignored">
+        This paragraph uses <code>.ignored</code>. You can select and copy it; it just will not receive a visible highlight.
       </p>
     </section>
 
@@ -150,6 +151,10 @@ const cssContent: CSSString = `
 .content a {
   color: #0645ad;
 }
+.content .ignored {
+  border-left: 3px solid #e5e5e5;
+  padding-left: 0.75rem;
+}
 `;
 
 const TEST_HIGHLIGHTS = `type:textContent|112$183$14$highlight-mint$|309$328$16$highlight-violet$|406$460$15$highlight-sky$`;
@@ -215,7 +220,7 @@ export default function MainTest() {
               "a",
               "sup",
               "sub",
-              ".no-select",
+              ".ignored",
               "h1",
               "h2",
               "h3",
