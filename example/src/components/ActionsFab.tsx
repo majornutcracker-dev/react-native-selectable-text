@@ -19,6 +19,7 @@ const FAB_BOTTOM = 16;
 
 type ActionsFabProps = {
   selectableTextViewRef: RefObject<SelectableTextViewRef | null>;
+  onClearHighlights: () => void;
 };
 
 type ActionFabIconName =
@@ -107,6 +108,7 @@ export function ActionsFab(props: ActionsFabProps) {
       tint: "#EF4444",
       icon: "clear-highlights",
       onPress: () => {
+        props.onClearHighlights();
         props.selectableTextViewRef.current?.clearHighlights();
       },
     },

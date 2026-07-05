@@ -302,7 +302,12 @@ export default function MainTest() {
         />
       </Group>
       <View style={styles.fabSpace} />
-      <ActionsFab selectableTextViewRef={selectableTextViewRef} />
+      <ActionsFab
+        selectableTextViewRef={selectableTextViewRef}
+        onClearHighlights={() => {
+          setPressedHighlight(null);
+        }}
+      />
       <BottomSheetFab onPress={() => setVisibleNote(true)} />
       <ColorFab
         colorClasses={colorClasses}
