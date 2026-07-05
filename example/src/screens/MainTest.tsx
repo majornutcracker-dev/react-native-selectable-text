@@ -214,8 +214,6 @@ export default function MainTest() {
           content={guideContent}
           css={cssContent}
           highlighterOptions={{
-            overlapping: true,
-            ignoreWhiteSpace: true,
             ignoredElements: [
               "a",
               "sup",

@@ -16,17 +16,6 @@ export type ColorClass = {
 
 export type HighlighterOptions = {
   /**
-   * A boolean to enable the overlap of highlights
-   * @default false
-   */
-  overlapping?: boolean;
-  /**
-   * A boolean indicating whether to ignore insignificant whitespace text nodes
-   * (e.g., line breaks or indentation between <p> tags in the HTML).
-   * @default true
-   */
-  ignoreWhiteSpace?: boolean;
-  /**
    * CSS selectors for elements excluded from visible highlights (e.g., 'a', '.ignored').
    * Text inside ignored elements remains selectable and copyable.
    * @default ['a','sub','sup']
@@ -175,6 +164,8 @@ export const BridgingNames = {
     getHighlights: "getHighlights",
   },
 };
+
+export const VERSION = "1.0.0";
 
 /*
 

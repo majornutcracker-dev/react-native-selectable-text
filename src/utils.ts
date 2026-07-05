@@ -75,10 +75,6 @@ export const htmlContent = ({
   const options = sanitizeOptions(o);
   const platform = p;
   const highlights = h;
-  const highlighterOptionsOverlapping = ho?.overlapping ?? false;
-  const highlighterOptions = JSON.stringify({
-    ignoreWhiteSpace: ho?.ignoreWhiteSpace ?? true,
-  });
   const ignoredElementsString = (
     ho?.ignoredElements ?? ["a", "sup", "sub"]
   ).join(", ");
@@ -182,7 +178,7 @@ export const htmlContent = ({
           // rangy
           highlighter: rangy.createHighlighter(),
           // extra
-          overlapping: ${highlighterOptionsOverlapping}
+          overlapping: false
         };
       }
 
@@ -192,7 +188,7 @@ export const htmlContent = ({
 
         try {
           const applierNames = ${applierNames};
-          const highlighterOptions = ${highlighterOptions};
+          const highlighterOptions = { ignoreWhiteSpace: true };
           applierNames.forEach((name) => {
             __MNST__.highlighter.addClassApplier(
               rangy.createClassApplier(name, {
@@ -226,6 +222,7 @@ export const htmlContent = ({
             }
           });
         }
+
         document.addEventListener("selectionchange", function (e) {
           e.preventDefault();
           const selection = __MNST__.selector.getSelected();
@@ -341,9 +338,18 @@ export const htmlContent = ({
       // @sdk-internal-with-event
       function highlightSelection(classApplierName) {
         try {
+          const highlightNames = ${applierNames}
+          const selector = highlightNames.map((c) => "."+c).join(",")
           const sel = document.getSelection();
           sel.removeAllRanges();
           sel.addRange(__MNST__.selector.cache.range);
+          const range = sel.getRangeAt(0);
+          const hasHighlightedNode = Array.from(
+            document.querySelectorAll(selector)
+          ).some(node => range.intersectsNode(node))
+          if (hasHighlightedNode) {
+            return
+          }
           const rangySel = rangy.getSelection();
           if (!rangySel.isCollapsed) {
             __MNST__.highlighter.highlightSelection(classApplierName, {
