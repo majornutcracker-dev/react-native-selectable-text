@@ -12,8 +12,192 @@ import {
   HTMLString,
   HighlighterOptions,
   Highlights,
+  SelectableTextViewFonts,
   SelectableTextViewOptions,
+  GoogleFontFamily,
 } from "./types";
+
+function escapeHtmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+export function fontsToHeadMarkup(
+  fonts: SelectableTextViewFonts | undefined
+): string {
+  if (!fonts) {
+    return "";
+  }
+
+  const chunks: string[] = [];
+
+  fonts.preconnect?.forEach((link) => {
+    const crossOrigin = link.crossOrigin ? " crossorigin" : "";
+    chunks.push(
+      `<link rel="preconnect" href="${escapeHtmlAttribute(link.href)}"${crossOrigin}>`
+    );
+  });
+
+  fonts.stylesheets?.forEach((sheet) => {
+    const crossOrigin = sheet.crossOrigin
+      ? ` crossorigin="${sheet.crossOrigin}"`
+      : "";
+    chunks.push(
+      `<link rel="stylesheet" href="${escapeHtmlAttribute(sheet.href)}"${crossOrigin}>`
+    );
+  });
+
+  return chunks.join("\n    ");
+}
+
+export function fontsToCSS(fonts: SelectableTextViewFonts | undefined): string {
+  if (!fonts?.faces?.length) {
+    return "";
+  }
+
+  return fonts.faces
+    .map((face) => {
+      const sources = (Array.isArray(face.src) ? face.src : [face.src])
+        .map((source) => `url("${escapeHtmlAttribute(source)}")`)
+        .join(", ");
+      const rules = [
+        `font-family: "${face.fontFamily.replace(/"/g, '\\"')}";`,
+        `src: ${sources};`,
+      ];
+
+      if (face.fontWeight != null) {
+        rules.push(`font-weight: ${face.fontWeight};`);
+      }
+      if (face.fontStyle) {
+        rules.push(`font-style: ${face.fontStyle};`);
+      }
+      if (face.fontDisplay) {
+        rules.push(`font-display: ${face.fontDisplay};`);
+      }
+      if (face.fontStretch) {
+        rules.push(`font-stretch: ${face.fontStretch};`);
+      }
+      if (face.unicodeRange) {
+        rules.push(`unicode-range: ${face.unicodeRange};`);
+      }
+
+      return `@font-face {\n  ${rules.join("\n  ")}\n}`;
+    })
+    .join("\n");
+}
+
+function buildGoogleFontFamilyParam(options: GoogleFontFamily): string {
+  const family = options.family.trim().replace(/\s+/g, "+");
+  const weights = options.weights ?? "400";
+  const isRange = weights.includes("..");
+
+  if (options.italic) {
+    if (isRange) {
+      return `${family}:ital,wght@0,${weights};1,${weights}`;
+    }
+
+    const weightList = weights.split(";").filter(Boolean);
+    const normalAxis = weightList.map((weight) => `0,${weight}`).join(";");
+    const italicAxis = weightList.map((weight) => `1,${weight}`).join(";");
+    return `${family}:ital,wght@${normalAxis};${italicAxis}`;
+  }
+
+  return `${family}:wght@${weights}`;
+}
+
+export function mergeFonts(
+  ...fonts: Array<SelectableTextViewFonts | undefined>
+): SelectableTextViewFonts {
+  const merged: SelectableTextViewFonts = {
+    preconnect: [],
+    stylesheets: [],
+    faces: [],
+  };
+  const seenPreconnect = new Set<string>();
+  const seenStylesheets = new Set<string>();
+
+  fonts.forEach((font) => {
+    if (!font) {
+      return;
+    }
+
+    font.preconnect?.forEach((link) => {
+      const key = `${link.href}:${link.crossOrigin ? "1" : "0"}`;
+      if (seenPreconnect.has(key)) {
+        return;
+      }
+      seenPreconnect.add(key);
+      merged.preconnect!.push(link);
+    });
+
+    font.stylesheets?.forEach((sheet) => {
+      if (seenStylesheets.has(sheet.href)) {
+        return;
+      }
+      seenStylesheets.add(sheet.href);
+      merged.stylesheets!.push(sheet);
+    });
+
+    font.faces?.forEach((face) => {
+      merged.faces!.push(face);
+    });
+  });
+
+  if (!merged.preconnect!.length) {
+    delete merged.preconnect;
+  }
+  if (!merged.stylesheets!.length) {
+    delete merged.stylesheets;
+  }
+  if (!merged.faces!.length) {
+    delete merged.faces;
+  }
+
+  return merged;
+}
+
+type GoogleFontsSingleOptions = {
+  family: string;
+  weights?: string;
+  italic?: boolean;
+  display?: "auto" | "block" | "swap" | "fallback" | "optional";
+};
+
+type GoogleFontsMultipleOptions = {
+  families: GoogleFontFamily[];
+  display?: "auto" | "block" | "swap" | "fallback" | "optional";
+};
+
+export function googleFonts(
+  options: GoogleFontsSingleOptions | GoogleFontsMultipleOptions
+): SelectableTextViewFonts {
+  const display = options.display ?? "swap";
+  const familyParams =
+    "families" in options
+      ? options.families.map(buildGoogleFontFamilyParam)
+      : [
+          buildGoogleFontFamilyParam({
+            family: options.family,
+            weights: options.weights,
+            italic: options.italic,
+          }),
+        ];
+  const href = `https://fonts.googleapis.com/css2?${familyParams
+    .map((param) => `family=${param}`)
+    .join("&")}&display=${display}`;
+
+  return {
+    preconnect: [
+      { href: "https://fonts.googleapis.com" },
+      { href: "https://fonts.gstatic.com", crossOrigin: true },
+    ],
+    stylesheets: [{ href }],
+  };
+}
 
 export function generatePromiseId(): string {
   const id =
@@ -60,6 +244,7 @@ export const htmlContent = ({
   h,
   c,
   css,
+  f,
   ho,
   p,
   o,
@@ -68,6 +253,7 @@ export const htmlContent = ({
   h: Highlights | undefined;
   c: HTMLString | undefined;
   css: CSSString | undefined;
+  f: SelectableTextViewFonts | undefined;
   ho: HighlighterOptions | undefined;
   p: string;
   o: SelectableTextViewOptions | undefined;
@@ -97,6 +283,8 @@ export const htmlContent = ({
   const content = c ?? "";
   const style = css ?? "";
   const colorClassesStyle = colorClassesToCSS(uniqueCC);
+  const fontsHeadMarkup = fontsToHeadMarkup(f);
+  const fontsCSS = fontsToCSS(f);
 
   return `
 <!doctype html>
@@ -106,7 +294,9 @@ export const htmlContent = ({
       name="viewport"
       content="width=device-width, initial-scale=${options.initialScale}, maximum-scale=${options.maximumScale}, user-scalable=${options.userScalable ? "yes" : "no"}"
     />
+    ${fontsHeadMarkup}
     <style>
+      ${fontsCSS}
       ${style}
       html,
       body {

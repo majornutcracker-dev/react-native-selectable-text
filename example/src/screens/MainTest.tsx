@@ -5,6 +5,7 @@ import {
   ColorClass,
   CSSString,
   ColorClassName,
+  googleFonts,
 } from "@majornutcracker/react-native-selectable-text";
 import { useRef, useState } from "react";
 import { Linking, StyleSheet, Text, View, Platform, Alert } from "react-native";
@@ -32,6 +33,13 @@ const guideContent: HTMLString = `
         <dd>This article is the HTML string passed to the component.</dd>
         <dt><code>css</code></dt>
         <dd>Injected styles for layout and typography (<code>.content</code>).</dd>
+        <dt><code>fonts</code></dt>
+        <dd>
+          Optional WebView font setup via <code>googleFonts()</code>,
+          <code>mergeFonts()</code>, or custom
+          <code>preconnect</code>, <code>stylesheets</code>, and <code>@font-face</code> rules.
+          Multiple families are supported in a single <code>fonts</code> config.
+        </dd>
         <dt><code>colorClasses</code></dt>
         <dd>Named highlight classes; the FAB switches the active one for <code>highlightSelection</code>.</dd>
         <dt><code>highlights</code></dt>
@@ -111,7 +119,8 @@ const guideContent: HTMLString = `
 
 const cssContent: CSSString = `
 .content {
-  font-family: system-ui, sans-serif;
+  font-family: "Source Sans 3", sans-serif;
+  font-optical-sizing: auto;
   line-height: 1.6;
   font-size: 14px;
   background-color: #fff;
@@ -123,6 +132,11 @@ const cssContent: CSSString = `
 }
 .content section:last-of-type {
   border-bottom: none;
+}
+.content h1,
+.content h2 {
+  font-family: "Source Serif 4", serif;
+  font-optical-sizing: auto;
 }
 .content h2 {
   font-size: 1rem;
@@ -159,6 +173,13 @@ const cssContent: CSSString = `
 `;
 
 const TEST_HIGHLIGHTS = `type:textContent|112$183$14$highlight-mint$|309$328$16$highlight-violet$|406$460$15$highlight-sky$`;
+
+const contentFonts = googleFonts({
+  families: [
+    { family: "Source Sans 3", weights: "200..900", italic: true },
+    { family: "Source Serif 4", weights: "400;600", italic: true },
+  ],
+});
 
 const colorClasses: ColorClass[] = [
   { name: "highlight-amber", color: "#FDE8A0" },
@@ -215,6 +236,7 @@ export default function MainTest() {
           colorClasses={colorClasses}
           content={guideContent}
           css={cssContent}
+          fonts={contentFonts}
           highlighterOptions={{
             ignoredElements: [
               "a",

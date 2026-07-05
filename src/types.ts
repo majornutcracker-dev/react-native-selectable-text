@@ -4,6 +4,43 @@ export type HTMLString = string;
 
 export type CSSString = string;
 
+export type SelectableTextViewFontPreconnect = {
+  href: string;
+  crossOrigin?: boolean;
+};
+
+export type SelectableTextViewFontStylesheet = {
+  href: string;
+  crossOrigin?: "anonymous" | "use-credentials";
+};
+
+export type SelectableTextViewFontFace = {
+  fontFamily: string;
+  src: string | string[];
+  fontWeight?: string | number;
+  fontStyle?: "normal" | "italic" | "oblique";
+  fontDisplay?: "auto" | "block" | "swap" | "fallback" | "optional";
+  fontStretch?: string;
+  unicodeRange?: string;
+};
+
+export type GoogleFontFamily = {
+  family: string;
+  weights?: string;
+  italic?: boolean;
+};
+
+/**
+ * Multiple fonts are supported: add several stylesheets, several @font-face entries,
+ * or combine configs with mergeFonts(). Use googleFonts({ families: [...] }) for
+ * multiple Google families in a single request.
+ */
+export type SelectableTextViewFonts = {
+  preconnect?: SelectableTextViewFontPreconnect[];
+  stylesheets?: SelectableTextViewFontStylesheet[];
+  faces?: SelectableTextViewFontFace[];
+};
+
 export type ColorClassName = string;
 
 export type ColorClass = {
@@ -126,6 +163,13 @@ export type SelectableTextViewPropsBase = {
    * This use a default implementation that provides some basic styles for the content, but you can provide your own implementation if you want to customize the appearance.
    */
   css?: CSSString;
+  /**
+   * --> Final property
+   * Font resources injected into the WebView head: preconnect hints, external stylesheets
+   * (e.g. Google Fonts), and optional @font-face rules for self-hosted fonts.
+   * Use the exported googleFonts() helper or build SelectableTextViewFonts manually.
+   */
+  fonts?: SelectableTextViewFonts;
   /**
    * --> Final property
    * A rangy highlighter and classApplier options object.
