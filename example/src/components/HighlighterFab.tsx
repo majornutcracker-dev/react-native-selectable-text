@@ -1,9 +1,12 @@
 import {
-  ColorClass,
-  ColorClassName,
+  Highlighter,
+  HighlighterName,
+  HighlighterType,
 } from "@majornutcracker/react-native-selectable-text";
+import { Image } from "expo-image";
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   type Dispatch,
@@ -11,27 +14,34 @@ import {
 } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import {
+  assetForClassName,
+  isColorHighlighterType,
+  type HighlighterAsset,
+} from "@/constants/highlighters";
 
 const FAB_ITEM_SIZE = 44;
 const FAB_ITEM_GAP = 12;
 const FAB_BOTTOM = 16;
+const FAB_SWATCH_SIZE = FAB_ITEM_SIZE - 6;
 
-type ColorFabProps = {
-  colorClasses: ColorClass[];
-  currentColorClassName: ColorClassName;
-  setCurrentColorClassName: Dispatch<SetStateAction<ColorClassName>>;
+type HighlighterFabProps = {
+  highlighters: Highlighter[];
+  currentHighlighterName: HighlighterName;
+  setCurrentHighlighterName: Dispatch<SetStateAction<HighlighterName>>;
 };
 
-export function ColorFab(props: ColorFabProps) {
+export function HighlighterFab(props: HighlighterFabProps) {
   const [expanded, setExpanded] = useState(false);
   const expandAnim = useRef(new Animated.Value(0)).current;
 
   const insets = useSafeAreaInsets();
   const bottom = insets.bottom + FAB_BOTTOM;
 
-  const currentColor =
-    props.colorClasses.find((c) => c.name === props.currentColorClassName)
-      ?.color ?? "#94A3B8";
+  const currentHighlighterAsset = useMemo(
+    () => assetForClassName(props.currentHighlighterName ?? ""),
+    [props.currentHighlighterName]
+  );
 
   useEffect(() => {
     Animated.spring(expandAnim, {
@@ -46,8 +56,8 @@ export function ColorFab(props: ColorFabProps) {
     setExpanded((value) => !value);
   };
 
-  const selectColor = (colorClassName: ColorClassName) => {
-    props.setCurrentColorClassName(colorClassName);
+  const selectHighlighter = (highlighterName: HighlighterName) => {
+    props.setCurrentHighlighterName(highlighterName);
     setExpanded(false);
   };
 
@@ -66,12 +76,18 @@ export function ColorFab(props: ColorFabProps) {
       ) : null}
 
       <View style={[styles.colorFabStack, { bottom }]} pointerEvents="box-none">
-        {props.colorClasses.map((colorClass, index) => {
-          const isCurrent = colorClass.name === props.currentColorClassName;
-          const staggerStart = index * 0.08;
+        {props.highlighters.map((highlighter, index) => {
+          const isCurrent = highlighter.name === props.currentHighlighterName;
+          const staggerWindow = 0.55;
+          const staggerStep =
+            props.highlighters.length > 1
+              ? (1 - staggerWindow) / (props.highlighters.length - 1)
+              : 0;
+          const staggerStart = index * staggerStep;
+          const staggerEnd = Math.min(staggerStart + staggerWindow, 1);
           const itemProgress = expandAnim.interpolate({
-            inputRange: [0, staggerStart, staggerStart + 0.55, 1],
-            outputRange: [0, 0, 0.6, 1],
+            inputRange: [0, staggerStart, staggerEnd],
+            outputRange: [0, 0, 1],
             extrapolate: "clamp",
           });
           const translateY = itemProgress.interpolate({
@@ -83,10 +99,11 @@ export function ColorFab(props: ColorFabProps) {
             outputRange: [0.2, 1],
           });
           const opacity = itemProgress;
+          const asset = assetForClassName(highlighter.name);
 
           return (
             <Animated.View
-              key={colorClass.name}
+              key={highlighter.name}
               pointerEvents={expanded ? "auto" : "none"}
               style={[
                 styles.fabItemSlot,
@@ -96,10 +113,10 @@ export function ColorFab(props: ColorFabProps) {
                 },
               ]}
             >
-              <ColorSwatch
-                color={colorClass.color}
+              <HighlighterSwatch
+                asset={asset}
                 selected={isCurrent}
-                onPress={() => selectColor(colorClass.name)}
+                onPress={() => selectHighlighter(highlighter.name)}
               />
             </Animated.View>
           );
@@ -110,10 +127,18 @@ export function ColorFab(props: ColorFabProps) {
             onPress={toggleExpanded}
             style={({ pressed }) => [
               styles.fabMain,
-              { backgroundColor: currentColor },
+              getFabMainStyle(currentHighlighterAsset),
               pressed && styles.fabMainPressed,
             ]}
           >
+            {currentHighlighterAsset?.type === "background-image" &&
+            currentHighlighterAsset.image ? (
+              <Image
+                source={{ uri: currentHighlighterAsset.image }}
+                style={styles.fabMainImage}
+                contentFit="cover"
+              />
+            ) : null}
             <Animated.View
               style={[
                 styles.fabMainIcon,
@@ -130,8 +155,15 @@ export function ColorFab(props: ColorFabProps) {
   );
 }
 
-function ColorSwatch(props: {
-  color: string;
+function getFabMainStyle(asset: HighlighterAsset | undefined) {
+  if (asset && isColorHighlighterType(asset.type) && asset.color) {
+    return { backgroundColor: asset.color };
+  }
+  return { backgroundColor: "#ffffff" };
+}
+
+function HighlighterSwatch(props: {
+  asset: HighlighterAsset | undefined;
   selected: boolean;
   onPress: () => void;
 }) {
@@ -146,6 +178,13 @@ function ColorSwatch(props: {
     }).start();
   };
 
+  const showImage =
+    props.asset?.type === "background-image" && props.asset.image;
+  const color =
+    props.asset && isColorHighlighterType(props.asset.type)
+      ? props.asset.color
+      : undefined;
+
   return (
     <Pressable
       onPress={props.onPress}
@@ -159,12 +198,36 @@ function ColorSwatch(props: {
           { transform: [{ scale: pressScale }] },
         ]}
       >
-        <View style={[styles.fabSwatch, { backgroundColor: props.color }]}>
-          {props.selected ? <View style={styles.fabSwatchCheck} /> : null}
-        </View>
+        {showImage ? (
+          <View style={styles.fabSwatch}>
+            <Image
+              source={{ uri: props.asset?.image }}
+              style={styles.fabSwatchImage}
+              contentFit="cover"
+            />
+          </View>
+        ) : (
+          <View
+            style={[styles.fabSwatch, { backgroundColor: color ?? "#94A3B8" }]}
+          >
+            <SwatchTypeIndicator type={props.asset?.type} />
+          </View>
+        )}
       </Animated.View>
     </Pressable>
   );
+}
+
+function SwatchTypeIndicator(props: { type: HighlighterType | undefined }) {
+  if (props.type === "text-decoration-color") {
+    return <View style={styles.swatchUnderline} />;
+  }
+
+  if (props.type === "outline-color") {
+    return <View style={styles.swatchOutlineSquare} />;
+  }
+
+  return null;
 }
 
 const styles = StyleSheet.create({
@@ -204,6 +267,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 3,
     borderColor: "#FFFFFF",
+    overflow: "hidden",
+  },
+  fabMainImage: {
+    ...StyleSheet.absoluteFill,
   },
   fabMainPressed: {
     opacity: 0.92,
@@ -244,20 +311,33 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   fabSwatch: {
-    width: FAB_ITEM_SIZE - 6,
-    height: FAB_ITEM_SIZE - 6,
-    borderRadius: (FAB_ITEM_SIZE - 6) / 2,
+    width: FAB_SWATCH_SIZE,
+    height: FAB_SWATCH_SIZE,
+    borderRadius: FAB_SWATCH_SIZE / 2,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "rgba(15, 23, 42, 0.12)",
+    overflow: "hidden",
   },
-  fabSwatchCheck: {
-    width: 10,
-    height: 6,
-    borderLeftWidth: 2,
-    borderBottomWidth: 2,
-    borderColor: "rgba(15, 23, 42, 0.7)",
-    transform: [{ rotate: "-45deg" }, { translateY: -1 }],
+  fabSwatchImage: {
+    width: FAB_SWATCH_SIZE,
+    height: FAB_SWATCH_SIZE,
+  },
+  swatchUnderline: {
+    position: "absolute",
+    bottom: 7,
+    width: 18,
+    height: 2.5,
+    borderRadius: 2,
+    backgroundColor: "rgba(15, 23, 42, 0.55)",
+  },
+  swatchOutlineSquare: {
+    width: 12,
+    height: 12,
+    borderRadius: 2,
+    borderWidth: 2,
+    borderColor: "rgba(15, 23, 42, 0.55)",
+    backgroundColor: "transparent",
   },
 });

@@ -26,7 +26,7 @@ export type SelectableTextViewFontFace = {
 
 export type HighlightData = {
   id: string;
-  colorClassName: string;
+  name: HighlighterName;
   text: string;
 };
 
@@ -47,14 +47,79 @@ export type SelectableTextViewFonts = {
   faces?: SelectableTextViewFontFace[];
 };
 
-export type ColorClassName = string;
+export type HighlighterName = string;
 
-export type ColorClass = {
-  /**
-   * A unique className that would be used as CSS classes to apply the selection
-   */
-  name: ColorClassName;
+export type HighlighterType =
+  | "background-color"
+  | "text-decoration-color"
+  | "outline-color"
+  | "background-image";
+
+export type HighlighterBackgroundColorOption = {
+  type: "background-color";
   color: string;
+};
+
+export type HighlighterTextDecorationColorOption = {
+  type: "text-decoration-color";
+  color: string;
+  line?: "underline" | "overline" | "line-through";
+  thickness?: number;
+  offset?: number;
+  style?: "solid" | "double" | "dotted" | "dashed" | "wavy";
+};
+
+export type HighlighterOutlineColorOption = {
+  type: "outline-color";
+  color: string;
+  width?: number;
+  offset?: number;
+  style?:
+    | "solid"
+    | "dotted"
+    | "dashed"
+    | "double"
+    | "groove"
+    | "ridge"
+    | "inset"
+    | "outset";
+};
+
+export type HighlighterBackgroundImageOption = {
+  type: "background-image";
+  image: string;
+  position?: "left" | "center" | "right" | "top" | "bottom" | string;
+  repeat?: "no-repeat" | "repeat" | "repeat-x" | "repeat-y" | string;
+  size?: "auto" | "cover" | "contain" | string;
+  animation?: {
+    keyframesCss: string;
+    name: string;
+    duration: string;
+    timingFunction:
+      | "linear"
+      | "ease"
+      | "ease-in"
+      | "ease-out"
+      | "ease-in-out"
+      | string;
+    iterationCount: number | "infinite";
+  };
+};
+
+export type Highlighter = {
+  /**
+   * A unique name for the highlighter.
+   * It is used as the className of the tag that wraps the selection,
+   * so in the css property you can add more styles than just the background color.
+   * If names are repeated, the last one will be chosen.
+   * @default "yellow-highlighter"
+   */
+  name: HighlighterName;
+  options:
+    | HighlighterBackgroundColorOption
+    | HighlighterTextDecorationColorOption
+    | HighlighterOutlineColorOption
+    | HighlighterBackgroundImageOption;
 };
 
 export type HighlighterOptions = {
@@ -120,11 +185,11 @@ export interface SelectableTextViewError extends Error {
 
 export type SelectableTextViewRef = {
   /**
-   * A function that applies highlighting to the current selection with a colorClassName previously defined in the colorClasses property;
+   * A function that applies highlighting to the current selection with a highlighter name previously defined in the highlighters property;
    * if it is not defined, the highlighting will not be applied.
    * @param name
    */
-  highlightSelection: (name?: ColorClassName) => void;
+  highlightSelection: (name?: HighlighterName) => void;
   /**
    * A function that removes the highlighting from the current selection
    */
@@ -186,11 +251,13 @@ export type SelectableTextViewRef = {
 export type SelectableTextViewPropsBase = {
   /**
    * --> Final property
-   * A list of ColorClass containing a unique name, color Hex or strings, The name is used as the className of the tag that wraps the selection,
-   * so in the css property you can add more styles than just the background color. If names are repeated, the last one will be chosen.
-   * @default [{name: yellow-highlighter, color: yellow}]
+   * A list of Highlighter, each with a unique name and an options object describing how to render the highlight
+   * (background-color, text-decoration-color, outline-color or background-image).
+   * The name is used as the className of the tag that wraps the selection, so in the css property you can add
+   * more styles. If names are repeated, the last one will be chosen.
+   * @default [{ name: "yellow-highlighter", options: { type: "background-color", color: "yellow" } }]
    */
-  colorClasses?: ColorClass[];
+  highlighters?: Highlighter[];
   /**
    * --> State property
    * A serialized string that represents the current highlights in the content. This can be used to restore the highlights when the component is re-rendered, for example when the user navigates away from the screen and then comes back.
@@ -264,7 +331,7 @@ export type SelectableTextViewPropsBase = {
   /**
    * --> State property
    * Called when a highlight is pressed.
-   * The payload includes the id of the highlight, the colorClassName of the highlight and the text of the highlight.
+   * The payload includes the id of the highlight, the name of the highlight and the text of the highlight.
    * @param highlight
    */
   onHighlightPressed?: (highlight: HighlightData) => void;

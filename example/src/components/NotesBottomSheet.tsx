@@ -1,4 +1,5 @@
-import { ColorClass } from "@majornutcracker/react-native-selectable-text";
+import { HighlightData } from "@majornutcracker/react-native-selectable-text";
+import { Image } from "expo-image";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -10,17 +11,15 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-export type PressedHighlight = {
-  id: string;
-  colorClassName: string;
-  text: string;
-};
+import {
+  assetForClassName,
+  isColorHighlighterType,
+  type HighlighterAsset,
+} from "@/constants/highlighters";
 
 type NotesBottomSheetProps = {
   visible: boolean;
-  highlight: PressedHighlight | null;
-  colorClasses: ColorClass[];
+  highlight: HighlightData | null;
   onClose: () => void;
   onFocusHighlight: (id: string) => void;
   onUnhighlight: (id: string) => void;
@@ -33,17 +32,33 @@ function formatHighlightText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-function HighlightHandle(props: { color: string }) {
+function HighlightHandle(props: { asset: HighlighterAsset | undefined }) {
+  const isImage = props.asset?.type === "background-image" && props.asset.image;
+  const color =
+    props.asset && isColorHighlighterType(props.asset.type)
+      ? (props.asset.color ?? "#ffffff")
+      : "#ffffff";
+  const handleBarColor = isImage
+    ? "#ffffff"
+    : color === "#ffffff"
+      ? "#000000"
+      : "#ffffff";
+
   return (
-    <View style={[styles.handleContainer, { backgroundColor: props.color }]}>
-      <View
-        style={[
-          styles.handleBar,
-          {
-            backgroundColor: props.color === "#ffffff" ? "#000000" : "#ffffff",
-          },
-        ]}
-      />
+    <View
+      style={[
+        styles.handleContainer,
+        !isImage ? { backgroundColor: color } : undefined,
+      ]}
+    >
+      {isImage ? (
+        <Image
+          source={{ uri: props.asset?.image }}
+          style={styles.handleImage}
+          contentFit="cover"
+        />
+      ) : null}
+      <View style={[styles.handleBar, { backgroundColor: handleBarColor }]} />
     </View>
   );
 }
@@ -51,7 +66,6 @@ function HighlightHandle(props: { color: string }) {
 export function NotesBottomSheet({
   visible,
   highlight,
-  colorClasses,
   onClose,
   onFocusHighlight,
   onUnhighlight,
@@ -61,9 +75,7 @@ export function NotesBottomSheet({
   const slideAnim = useRef(new Animated.Value(SHEET_HEIGHT)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  const highlightColor =
-    colorClasses.find((c) => c.name === highlight?.colorClassName)?.color ??
-    "#ffffff";
+  const highlightAsset = assetForClassName(highlight?.name ?? "");
   const formattedText = highlight ? formatHighlightText(highlight.text) : "";
 
   useEffect(() => {
@@ -145,7 +157,7 @@ export function NotesBottomSheet({
             },
           ]}
         >
-          <HighlightHandle color={highlightColor} />
+          <HighlightHandle asset={highlightAsset} />
           <View style={styles.content}>
             <Text style={styles.label}>Highlight ID</Text>
             <Text style={styles.metaValue}>
@@ -233,6 +245,10 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    overflow: "hidden",
+  },
+  handleImage: {
+    ...StyleSheet.absoluteFillObject,
   },
   handleBar: {
     width: 56,

@@ -7,7 +7,7 @@ import {
   textRange,
 } from "./rangy@1.3.2";
 import {
-  ColorClass,
+  Highlighter,
   CSSString,
   HTMLString,
   HighlighterOptions,
@@ -206,19 +206,67 @@ export function generatePromiseId(): string {
   return id;
 }
 
-function uniqueByName(list: ColorClass[]): ColorClass[] {
-  const map = new Map<string, ColorClass>();
-
+function uniqueByName(list: Highlighter[]): Highlighter[] {
+  const map = new Map<string, Highlighter>();
   for (const item of list) {
     map.set(item.name, item);
   }
-
   return Array.from(map.values());
 }
 
-function colorClassesToCSS(list: ColorClass[]): string {
+function toCssLength(
+  value: number | string | undefined,
+  fallback: string
+): string {
+  if (value === undefined) {
+    return fallback;
+  }
+  return typeof value === "number" ? `${value}px` : value;
+}
+
+function highlightersToCSS(list: Highlighter[]): string {
   return list
-    .map((c) => `.${c.name} { background-color: ${c.color}; }`)
+    .map((c) => {
+      const name = c.name;
+      const options = c.options;
+      if (options.type === "background-color") {
+        return `.${name} { background-color: ${options.color}; }`;
+      } else if (options.type === "text-decoration-color") {
+        return `
+        .${name} { 
+          text-decoration-color: ${options.color}; 
+          text-decoration-line: ${options.line ?? "underline"}; 
+          text-decoration-style: ${options.style ?? "solid"};
+          text-decoration-thickness: ${toCssLength(options.thickness, "2px")};
+          text-underline-offset: ${toCssLength(options.offset, "2px")};
+        }`;
+      } else if (options.type === "outline-color") {
+        return `
+        .${name} {
+          outline-color: ${options.color}; 
+          outline-style: ${options.style ?? "solid"};
+          outline-width: ${toCssLength(options.width, "2px")};
+          outline-offset: ${toCssLength(options.offset, "2px")};
+        }`;
+      } else if (options.type === "background-image") {
+        return `
+        .${name} {
+          background-image: ${options.image};
+          background-size: ${options.size ?? "auto"};
+          background-position: ${options.position ?? "left"};
+          background-repeat: ${options.repeat ?? "no-repeat"};
+          ${
+            options.animation
+              ? `animation: ${options.animation.name} ${options.animation.duration} ${options.animation.timingFunction} ${options.animation.iterationCount};`
+              : ""
+          }
+        }
+
+        ${options.animation?.keyframesCss ?? ""}
+        `;
+      }
+      return `.${name} { }`;
+    })
     .join("\n");
 }
 
@@ -240,7 +288,7 @@ function sanitizeOptions(
 }
 
 export const htmlContent = ({
-  cC,
+  hl,
   h,
   c,
   css,
@@ -249,7 +297,7 @@ export const htmlContent = ({
   p,
   o,
 }: {
-  cC: ColorClass[] | undefined;
+  hl: Highlighter[] | undefined;
   h: Highlights | undefined;
   c: HTMLString | undefined;
   css: CSSString | undefined;
@@ -265,24 +313,30 @@ export const htmlContent = ({
     ho?.ignoredElements ?? ["a", "sup", "sub"]
   ).join(", ");
 
-  const uniqueCC: ColorClass[] = cC
+  const uniqueHL: Highlighter[] = hl
     ? uniqueByName([
         {
           name: "yellow-highlighter",
-          color: "yellow",
+          options: {
+            type: "background-color",
+            color: "yellow",
+          },
         },
-        ...cC,
+        ...hl,
       ])
     : [
         {
           name: "yellow-highlighter",
-          color: "yellow",
+          options: {
+            type: "background-color",
+            color: "yellow",
+          },
         },
       ];
-  const applierNames = JSON.stringify(uniqueCC.map((c) => c.name));
+  const applierNames = JSON.stringify(uniqueHL.map((c) => c.name));
   const content = c ?? "";
   const style = css ?? "";
-  const colorClassesStyle = colorClassesToCSS(uniqueCC);
+  const cssClasses = highlightersToCSS(uniqueHL);
   const fontsHeadMarkup = fontsToHeadMarkup(f);
   const fontsCSS = fontsToCSS(f);
 
@@ -304,8 +358,14 @@ export const htmlContent = ({
         padding: 0;
         width: 100%;
       }
-      ${colorClassesStyle}
-      .color-class-hidden { background-color: transparent !important }
+      ${cssClasses}
+      .highlighter-hidden { 
+        background-color: transparent !important;
+        background-image: none !important;
+        outline-color: transparent !important;
+        text-decoration-color: transparent !important;
+        animation: none !important;
+      }
     </style>
   </head>
   <body>
@@ -477,7 +537,7 @@ export const htmlContent = ({
       function sendOnHighlightPressed(highlights, text) {
         postMessage(BridgingNames.events.onHighlightPressed, {
           id: highlights.id,
-          colorClassName: highlights.classApplier.className,
+          name: highlights.classApplier.className,
           text: text ?? "",
         });
       }
@@ -661,6 +721,7 @@ export const htmlContent = ({
         try {
           __MNST__.highlighter.removeAllHighlights();
           clearIgnoredElementsBackgroundColors();
+          clearHighlightOutline();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
           sendOnError(
@@ -759,7 +820,7 @@ export const htmlContent = ({
           const highlights = __MNST__.highlighter.highlights || [];
           const data = highlights.map((h) => ({
             id: String(h.id),
-            colorClassName: h.classApplier.className,
+            name: h.classApplier.className,
             text: h.getText ? h.getText() : "",
           }));
           sendGetAllHighlightsData(id, true, data, undefined);
@@ -819,11 +880,11 @@ export const htmlContent = ({
         const condition = inverse ? !visible: visible;
         if (condition) {
           nodes.forEach((node) => {
-            node.classList.add("color-class-hidden");
+            node.classList.add("highlighter-hidden");
           });
         } else {
           nodes.forEach((node) => {
-            node.classList.remove("color-class-hidden");
+            node.classList.remove("highlighter-hidden");
           });
         }
         return !visible;

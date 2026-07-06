@@ -3,22 +3,20 @@ import {
   HTMLString,
   SelectableTextViewRef,
   CSSString,
-  ColorClassName,
   googleFonts,
+  HighlighterName,
+  HighlightData,
 } from "@majornutcracker/react-native-selectable-text";
 import { useRef, useState } from "react";
 import { Linking, StyleSheet, Text, View, Platform, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ActionsFab } from "@/components/ActionsFab";
 import { BottomSheetFab } from "@/components/BottomSheetFab";
-import { ColorFab } from "@/components/ColorFab";
-import {
-  NotesBottomSheet,
-  type PressedHighlight,
-} from "@/components/NotesBottomSheet";
+import { HighlighterFab } from "@/components/HighlighterFab";
+import { NotesBottomSheet } from "@/components/NotesBottomSheet";
 import Clipboard from "@react-native-clipboard/clipboard";
 import { useToastNotification } from "@/context/ToastNotificationProvider";
-import { colorClasses } from "@/constants/colorClasses";
+import { highlighters } from "@/constants/highlighters";
 
 const guideContent: HTMLString = `
 <article class="content">
@@ -45,7 +43,7 @@ const guideContent: HTMLString = `
           <code>preconnect</code>, <code>stylesheets</code>, and <code>@font-face</code> rules.
           Multiple families are supported in a single <code>fonts</code> config.
         </dd>
-        <dt><code>colorClasses</code></dt>
+        <dt><code>highlighters</code></dt>
         <dd>Named highlight classes; the FAB switches the active one for <code>highlightSelection</code>.</dd>
         <dt><code>highlights</code></dt>
         <dd>Optional serialized state to restore highlights when the screen remounts.</dd>
@@ -82,7 +80,7 @@ const guideContent: HTMLString = `
         </li>
         <li>
           <code>onHighlightPressed</code> — fired when a highlight is tapped. Payload:
-          <code>id</code>, <code>colorClassName</code>, and <code>text</code>. In this demo it opens
+          <code>id</code>, <code>name</code>, and <code>text</code>. In this demo it opens
           the notes sheet; tap any existing highlight to try it.
         </li>
       </ul>
@@ -91,14 +89,14 @@ const guideContent: HTMLString = `
     <section aria-labelledby="ref">
       <h2 id="ref">Ref API</h2>
       <ul>
-        <li><code>highlightSelection(colorClassName?)</code> — applies the active color to the cached selection.</li>
+        <li><code>highlightSelection(name?)</code> — applies the active color to the cached selection.</li>
         <li><code>unhighlightSelection()</code> — removes highlight from the cached selection.</li>
         <li><code>clearHighlights()</code> — removes all highlights from the content (left FAB).</li>
         <li><code>getSelectedText()</code> — returns the cached selected text (left FAB).</li>
         <li><code>getHighlights()</code> — returns the serialized highlights string (left FAB).</li>
         <li>
           <code>getAllHighlightsData()</code> — returns an array of
-          <code>{ id, colorClassName, text }</code> for every highlight. The left FAB
+          <code>{ id, name, text }</code> for every highlight. The left FAB
           "All Highlights Data" action opens a dedicated screen listing this payload.
         </li>
         <li><code>focusHighlight(id)</code> — scrolls to a highlight by id and outlines it (notes sheet "Focus").</li>
@@ -225,12 +223,12 @@ const contentFonts = googleFonts({
 
 export default function MainTest() {
   const selectableTextViewRef = useRef<SelectableTextViewRef>(null);
-  const [currentColorClassName, setCurrentColorClassName] =
-    useState<ColorClassName>(colorClasses[0].name);
+  const [currentHighlighterName, setCurrentHighlighterName] =
+    useState<HighlighterName>(highlighters[0].name);
   const { showToast } = useToastNotification();
   const [visibleNote, setVisibleNote] = useState(false);
   const [pressedHighlight, setPressedHighlight] =
-    useState<PressedHighlight | null>(null);
+    useState<HighlightData | null>(null);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -258,7 +256,7 @@ export default function MainTest() {
               const key = event.nativeEvent.key;
               if (key === "highlight") {
                 selectableTextViewRef.current?.highlightSelection(
-                  currentColorClassName
+                  currentHighlighterName
                 );
               } else if (key === "unhighlight") {
                 selectableTextViewRef.current?.unhighlightSelection();
@@ -270,7 +268,7 @@ export default function MainTest() {
               }
             },
           }}
-          colorClasses={colorClasses}
+          highlighters={highlighters}
           content={guideContent}
           css={cssContent}
           fonts={contentFonts}
@@ -320,10 +318,10 @@ export default function MainTest() {
           setPressedHighlight(null);
         }}
       />
-      <ColorFab
-        colorClasses={colorClasses}
-        currentColorClassName={currentColorClassName}
-        setCurrentColorClassName={setCurrentColorClassName}
+      <HighlighterFab
+        highlighters={highlighters}
+        currentHighlighterName={currentHighlighterName}
+        setCurrentHighlighterName={setCurrentHighlighterName}
       />
       <NotesBottomSheet
         visible={visibleNote}
@@ -332,7 +330,6 @@ export default function MainTest() {
           setVisibleNote(false);
         }}
         highlight={pressedHighlight}
-        colorClasses={colorClasses}
         onFocusHighlight={(id) => {
           setVisibleNote(false);
           selectableTextViewRef.current?.focusHighlight(id);

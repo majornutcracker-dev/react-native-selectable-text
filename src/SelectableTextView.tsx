@@ -9,6 +9,7 @@ import {
   Highlights,
   SelectableTextViewError,
   HighlightData,
+  HighlighterName,
 } from "./types";
 import { generatePromiseId, htmlContent } from "./utils";
 import { Linking, Platform } from "react-native";
@@ -23,7 +24,7 @@ const SelectableTextView = React.forwardRef<
   SelectableTextViewProps
 >((props, ref) => {
   const {
-    colorClasses,
+    highlighters,
     highlights,
     content,
     css,
@@ -48,7 +49,7 @@ const SelectableTextView = React.forwardRef<
 
   const finalSource = React.useRef({
     html: htmlContent({
-      cC: colorClasses,
+      hl: highlighters,
       h: highlights,
       c: content,
       css: css,
@@ -188,10 +189,10 @@ const SelectableTextView = React.forwardRef<
     };
   }, []);
 
-  const highlightSelection = (colorClassName?: string) => {
+  const highlightSelection = (highlighterName?: HighlighterName) => {
     _postMessage({
       type: BridgingNames.functions.highlightSelection,
-      value: colorClassName,
+      value: highlighterName,
     });
   };
 

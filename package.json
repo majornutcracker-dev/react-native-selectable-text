@@ -24,7 +24,6 @@
     "MajorNutcracker",
     "selectable text",
     "text selection",
-    "custom popup",
     "rangy",
     "highlighting",
     "serialization",
@@ -36,7 +35,6 @@
     "text selection library",
     "react-native text selection",
     "expo text selection",
-    "react-native popup",
     "ios",
     "android"
   ],

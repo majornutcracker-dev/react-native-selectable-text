@@ -1,9 +1,14 @@
 import { HighlightData } from "@majornutcracker/react-native-selectable-text";
+import { Image } from "expo-image";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo } from "react";
 import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colorForClassName } from "@/constants/colorClasses";
+import {
+  assetForClassName,
+  isColorHighlighterType,
+  type HighlighterAsset,
+} from "@/constants/highlighters";
 
 function parseHighlightsData(raw: unknown): HighlightData[] {
   if (typeof raw !== "string") {
@@ -19,6 +24,27 @@ function parseHighlightsData(raw: unknown): HighlightData[] {
 
 function formatHighlightText(text: string): string {
   return text.replace(/\s+/g, " ").trim();
+}
+
+function HighlightAssetSwatch(props: { asset: HighlighterAsset }) {
+  const isImage = props.asset.type === "background-image" && props.asset.image;
+
+  if (isImage) {
+    return (
+      <Image
+        source={{ uri: props.asset.image }}
+        style={styles.assetSwatch}
+        contentFit="cover"
+      />
+    );
+  }
+
+  const color =
+    isColorHighlighterType(props.asset.type) && props.asset.color
+      ? props.asset.color
+      : "#94A3B8";
+
+  return <View style={[styles.assetSwatch, { backgroundColor: color }]} />;
 }
 
 export default function HighlightsData() {
@@ -57,27 +83,37 @@ export default function HighlightsData() {
             </Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View
-                style={[
-                  styles.swatch,
-                  { backgroundColor: colorForClassName(item.colorClassName) },
-                ]}
-              />
-              <Text style={styles.className}>{item.colorClassName}</Text>
-              <Text style={styles.idText}>#{item.id}</Text>
+        renderItem={({ item }) => {
+          const asset = assetForClassName(item.name);
+          if (!asset) {
+            return null;
+          }
+
+          return (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <HighlightAssetSwatch asset={asset} />
+                <Text style={styles.className}>{item.name}</Text>
+                <Text style={styles.idText}>#{item.id}</Text>
+              </View>
+              <Text style={styles.text}>{formatHighlightText(item.text)}</Text>
             </View>
-            <Text style={styles.text}>{formatHighlightText(item.text)}</Text>
-          </View>
-        )}
+          );
+        }}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  assetSwatch: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.1)",
+    overflow: "hidden",
+  },
   container: {
     flex: 1,
     backgroundColor: "#eee",
@@ -138,13 +174,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-  },
-  swatch: {
-    width: 18,
-    height: 18,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.1)",
   },
   className: {
     flex: 1,
