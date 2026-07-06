@@ -103,6 +103,13 @@ const guideContent: HTMLString = `
         </li>
         <li><code>focusHighlight(id)</code> — scrolls to a highlight by id and outlines it (notes sheet "Focus").</li>
         <li><code>unhighlightById(id)</code> — removes a single highlight by id (notes sheet "Unhighlight").</li>
+        <li>
+          <code>getHighlightsVisibilityState()</code> — returns <code>true</code> when highlights are visible
+          <code>false</code> when highlights are hidden.
+        </li>
+        <li>
+          <code>toggleHighlightsVisibility()</code> — hides or shows highlights without deleting them.
+        </li>
       </ul>
     </section>
 
@@ -302,13 +309,13 @@ export default function MainTest() {
         />
       </Group>
       <View style={styles.fabSpace} />
+      <BottomSheetFab onPress={() => setVisibleNote(true)} />
       <ActionsFab
         selectableTextViewRef={selectableTextViewRef}
         onClearHighlights={() => {
           setPressedHighlight(null);
         }}
       />
-      <BottomSheetFab onPress={() => setVisibleNote(true)} />
       <ColorFab
         colorClasses={colorClasses}
         currentColorClassName={currentColorClassName}

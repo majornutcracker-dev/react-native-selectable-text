@@ -305,6 +305,7 @@ export const htmlContent = ({
         width: 100%;
       }
       ${colorClassesStyle}
+      .color-class-hidden { background-color: transparent !important }
     </style>
   </head>
   <body>
@@ -344,6 +345,8 @@ export const htmlContent = ({
           // state
           state: {
             outlinedElements: [],
+            visible: true,
+            highlights: "type:textContent",
           },
           // constants
           platform: {
@@ -377,6 +380,7 @@ export const htmlContent = ({
       }
 
       // <------------------------------ Bridging ----------------------------------->
+
       const BridgingNames = {
         // in
         functions: {
@@ -401,6 +405,8 @@ export const htmlContent = ({
           getSelectedText: "getSelectedText",
           getHighlights: "getHighlights",
           getAllHighlightsData: "getAllHighlightsData",
+          getHighlightsVisibilityState: "getHighlightsVisibilityState",
+          toggleHighlightsVisibility: "toggleHighlightsVisibility",
         },
       };
 
@@ -424,6 +430,10 @@ export const htmlContent = ({
           getHighlights(value); // promiseId
         } else if (type === BridgingNames.promises.getAllHighlightsData) {
           getAllHighlightsData(value); // promiseId
+        } else if (type === BridgingNames.promises.getHighlightsVisibilityState) {
+          getHighlightsVisibilityState(value); // promiseId
+        } else if (type === BridgingNames.promises.toggleHighlightsVisibility) {
+          toggleHighlightsVisibility(value); // promiseId
         } else {
           sendOnError(
             "bridge_message_error",
@@ -498,6 +508,26 @@ export const htmlContent = ({
           error,
         });
       }
+      
+      // @native-promise-resolve
+      function sendGetHighlightsVisibilityState(promiseId, success, visible, error) {
+        postMessage(BridgingNames.promises.getHighlightsVisibilityState, {
+          promiseId,
+          success,
+          visible,
+          error,
+        });
+      }
+
+      // @native-promise-resolve
+      function sendToggleHighlightsVisibility(promiseId, success, visible, error) {
+        postMessage(BridgingNames.promises.toggleHighlightsVisibility, {
+          promiseId,
+          success,
+          visible,
+          error,
+        });
+      }
 
       // <------------------------ Internal functions ------------------------------->
 
@@ -511,6 +541,7 @@ export const htmlContent = ({
           __MNST__.highlighter.removeAllHighlights();
           __MNST__.highlighter.deserialize(highlights);
           clearIgnoredElementsBackgroundColors();
+          applyHighlightVisibilityClass(false, true);
           sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
           sendOnError(
@@ -574,6 +605,7 @@ export const htmlContent = ({
                   : true,
             });
             clearIgnoredElementsBackgroundColors();
+            applyHighlightVisibilityClass(false, true);
             sendOnHighlightChange(__MNST__.highlighter.serialize());
           }
         } catch (e) {
@@ -636,17 +668,6 @@ export const htmlContent = ({
         }
       }
 
-      // @sdk-internal
-      function findHighlightById(id) {
-        const highlights = __MNST__.highlighter.highlights || [];
-        for (let i = 0; i < highlights.length; i++) {
-          if (String(highlights[i].id) === String(id)) {
-            return highlights[i];
-          }
-        }
-        return null;
-      }
-
       // @sdk-internal-with-event
       function focusHighlight(id) {
         try {
@@ -661,10 +682,7 @@ export const htmlContent = ({
           }
           clearHighlightOutline();
           const elements = highlight.getHighlightElements();
-          elements.forEach((el) => {
-            el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
-            __MNST__.state.outlinedElements.push(el);
-          });
+          applyOutline(elements);
           if (elements.length > 0 && elements[0].scrollIntoView) {
             elements[0].scrollIntoView({ behavior: "smooth", block: "center" });
           }
@@ -743,12 +761,27 @@ export const htmlContent = ({
         }
       }
 
-      // @sdk-internal
-      function clearHighlightOutline() {
-        __MNST__.state.outlinedElements.forEach((el) => {
-          el.style.boxShadow = "";
-        });
-        __MNST__.state.outlinedElements = [];
+      // @sdk-internal-with-resolve
+      function getHighlightsVisibilityState(id) {
+        try {
+          sendGetHighlightsVisibilityState(id, true, __MNST__.state.visible, undefined);
+        } catch (e) {
+          console.error("Failed to get highlights visibility state: ", e);
+          sendGetHighlightsVisibilityState(id, false, undefined, e.message);
+        }
+      }
+
+      // @sdk-internal-with-resolve
+      function toggleHighlightsVisibility(id) {
+        try {
+          clearHighlightOutline();
+          const toggle = applyHighlightVisibilityClass(true, false);
+          __MNST__.state.visible = toggle;
+          sendToggleHighlightsVisibility(id, true, __MNST__.state.visible, undefined);
+        } catch (e) {
+          console.error("Failed to toggle highlights visibility: ", e);
+          sendToggleHighlightsVisibility(id, false, undefined, e.message);
+        }
       }
 
       // @sdk-internal-with-event
@@ -757,16 +790,65 @@ export const htmlContent = ({
         if (!highlight) {
           return;
         }
-        let text = "";
-        highlight.getHighlightElements().forEach((el) => {
-          text += el.textContent ?? "";
-          el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
-          __MNST__.state.outlinedElements.push(el);
-          });
+        const text = applyOutline(highlight.getHighlightElements());
         sendOnHighlightPressed(highlight, text);
       }
 
       // <------------------- Internal utils functions ------------------------>
+
+      function applyHighlightVisibilityClass(throwError = false, inverse = false) {
+        const visible = __MNST__.state.visible;
+        const highlightNames = ${applierNames};
+        const selector = highlightNames.map((c) => "."+c).join(", ");
+        const nodes = [...document.querySelectorAll(selector)];
+        if (nodes.length === 0) {
+          if (throwError) {
+            throw new Error("No highlights found");
+          } else {
+            return visible;
+          }
+        } 
+        const condition = inverse ? !visible: visible;
+        if (condition) {
+          nodes.forEach((node) => {
+            node.classList.add("color-class-hidden");
+          });
+        } else {
+          nodes.forEach((node) => {
+            node.classList.remove("color-class-hidden");
+          });
+        }
+        return !visible;
+      }
+
+      function findHighlightById(id) {
+        const highlights = __MNST__.highlighter.highlights || [];
+        for (let i = 0; i < highlights.length; i++) {
+          if (String(highlights[i].id) === String(id)) {
+            return highlights[i];
+          }
+        }
+        return null;
+      }
+
+      function clearHighlightOutline() {
+        __MNST__.state.outlinedElements.forEach((el) => {
+          el.style.boxShadow = "";
+        });
+        __MNST__.state.outlinedElements = [];
+      }
+
+      function applyOutline(elements) {
+        let text = "";
+        elements.forEach((el) => {
+          if(__MNST__.state.visible) {
+            el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
+            __MNST__.state.outlinedElements.push(el);
+          }
+          text += el.textContent ?? "";
+        });
+        return text;
+      }
       
       function clearIgnoredElementsBackgroundColors() {
         const ignoredSelector = "${ignoredElementsString}".trim();
@@ -813,6 +895,7 @@ export const htmlContent = ({
       }
 
       // <------------------------ Bootstrap ----------------------------------->
+
       if (!window.__MNST__init) {
         window.__MNST__init = true;
 
@@ -882,6 +965,9 @@ export const htmlContent = ({
         });
 
         document.addEventListener("click", function (event) {
+          if (!__MNST__.state.visible) {
+            return;
+          }
           const highlightNames = ${applierNames};
           const selector = highlightNames.map((c) => "." + c).join(",");
           const target = event.target;

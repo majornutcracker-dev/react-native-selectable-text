@@ -162,6 +162,20 @@ export type SelectableTextViewRef = {
    * @returns All the highlights data
    */
   getAllHighlightsData: () => Promise<HighlightData[]>;
+  /**
+   * A promise that returns whether highlights are currently visibility.
+   * Initially, highlights are visible.
+   * @throws js Error
+   * @returns `true` if highlights are visible, `false` if hidden
+   */
+  getHighlightsVisibilityState: () => Promise<boolean>;
+  /**
+   * A promise that toggles highlight visibility without clearing highlights and each highlight data.
+   * Initially, highlights are visible.
+   * @throws js Error
+   * @returns The new visibility state (`true` if visible, `false` if hidden)
+   */
+  toggleHighlightsVisibility: () => Promise<boolean>;
 };
 
 export type SelectableTextViewPropsBase = {
@@ -280,6 +294,8 @@ export const BridgingNames = {
     getSelectedText: "getSelectedText",
     getHighlights: "getHighlights",
     getAllHighlightsData: "getAllHighlightsData",
+    getHighlightsVisibilityState: "getHighlightsVisibilityState",
+    toggleHighlightsVisibility: "toggleHighlightsVisibility",
   },
 };
 

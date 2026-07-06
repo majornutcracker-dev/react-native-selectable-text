@@ -113,6 +113,40 @@ const SelectableTextView = React.forwardRef<
         onError?.(data.value as SelectableTextViewError);
       } else if (data.type === BridgingNames.events.onHighlightPressed) {
         onHighlightPressed?.(data.value as HighlightData);
+      } else if (
+        data.type === BridgingNames.promises.getHighlightsVisibilityState
+      ) {
+        const success = data.value.success;
+        const id = data.value.promiseId;
+        const visible = data.value.visible;
+        const error = data.value.error;
+        if (success) {
+          promises.current[id]?.resolve(visible ?? false);
+        } else {
+          promises.current[id]?.reject(
+            new Error(
+              error ?? "Unknown error while getting highlights visibility state"
+            )
+          );
+        }
+        delete promises.current[id];
+      } else if (
+        data.type === BridgingNames.promises.toggleHighlightsVisibility
+      ) {
+        const success = data.value.success;
+        const id = data.value.promiseId;
+        const visible = data.value.visible;
+        const error = data.value.error;
+        if (success) {
+          promises.current[id]?.resolve(visible ?? false);
+        } else {
+          promises.current[id]?.reject(
+            new Error(
+              error ?? "Unknown error while toggling highlights visibility"
+            )
+          );
+        }
+        delete promises.current[id];
       }
     },
     [onTextSelectionChange, onHighlightsChange, onError]
@@ -249,6 +283,46 @@ const SelectableTextView = React.forwardRef<
     });
   };
 
+  const getHighlightsVisibilityState = () => {
+    return new Promise<boolean>((resolve, reject) => {
+      const id = generatePromiseId();
+      promises.current[id] = {
+        resolve,
+        reject,
+      };
+      _postMessage({
+        type: BridgingNames.promises.getHighlightsVisibilityState,
+        value: id,
+      });
+      setTimeout(() => {
+        if (promises.current[id]) {
+          promises.current[id]?.reject(new Error("Timeout"));
+          delete promises.current[id];
+        }
+      }, 2000); // 2 second timeout
+    });
+  };
+
+  const toggleHighlightsVisibility = () => {
+    return new Promise<boolean>((resolve, reject) => {
+      const id = generatePromiseId();
+      promises.current[id] = {
+        resolve,
+        reject,
+      };
+      _postMessage({
+        type: BridgingNames.promises.toggleHighlightsVisibility,
+        value: id,
+      });
+      setTimeout(() => {
+        if (promises.current[id]) {
+          promises.current[id]?.reject(new Error("Timeout"));
+          delete promises.current[id];
+        }
+      }, 2000); // 2 second timeout
+    });
+  };
+
   const _postMessage = (message: Message) => {
     webviewRef.current?.postMessage(JSON.stringify(message));
   };
@@ -262,6 +336,8 @@ const SelectableTextView = React.forwardRef<
     focusHighlight,
     unhighlightById,
     getAllHighlightsData,
+    getHighlightsVisibilityState,
+    toggleHighlightsVisibility,
   }));
 
   return (

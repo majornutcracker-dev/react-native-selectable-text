@@ -2,7 +2,6 @@ import { ColorClass } from "@majornutcracker/react-native-selectable-text";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated,
-  Dimensions,
   Modal,
   Pressable,
   StyleSheet,

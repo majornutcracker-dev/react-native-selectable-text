@@ -26,6 +26,7 @@ type ActionFabIconName =
   | "highlights"
   | "highlights-data"
   | "selection"
+  | "toggle-highlights"
   | "clear-highlights";
 
 type ActionFabItem = {
@@ -38,6 +39,7 @@ type ActionFabItem = {
 
 export function ActionsFab(props: ActionsFabProps) {
   const [expanded, setExpanded] = useState(false);
+  const [highlightsVisible, setHighlightsVisible] = useState(true);
   const expandAnim = useRef(new Animated.Value(0)).current;
   const { showToast } = useToastNotification();
   const router = useRouter();
@@ -65,7 +67,7 @@ export function ActionsFab(props: ActionsFabProps) {
             { text: "OK", style: "cancel" },
           ]);
         } catch (error) {
-          showToast(error as string);
+          showToast(error instanceof Error ? error.message : "Unknown error");
         }
       },
     },
@@ -83,7 +85,7 @@ export function ActionsFab(props: ActionsFabProps) {
             params: { data: JSON.stringify(data ?? []) },
           });
         } catch (error) {
-          showToast(error as string);
+          showToast(error instanceof Error ? error.message : "Unknown error");
         }
       },
     },
@@ -98,7 +100,24 @@ export function ActionsFab(props: ActionsFabProps) {
             await props.selectableTextViewRef.current?.getSelectedText();
           Alert.alert("Selected Text", JSON.stringify(selectedText));
         } catch (error) {
-          showToast(error as string);
+          showToast(error instanceof Error ? error.message : "Unknown error");
+        }
+      },
+    },
+    {
+      key: "toggle-highlights-visibility",
+      label: highlightsVisible ? "Hide Highlights" : "Show Highlights",
+      tint: "#10B981",
+      icon: "toggle-highlights",
+      onPress: async () => {
+        try {
+          const visible =
+            await props.selectableTextViewRef.current?.toggleHighlightsVisibility();
+          if (visible !== undefined) {
+            setHighlightsVisible(visible);
+          }
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : "Unknown error");
         }
       },
     },
@@ -151,10 +170,14 @@ export function ActionsFab(props: ActionsFabProps) {
         pointerEvents="box-none"
       >
         {actions.map((action, index) => {
-          const staggerStart = index * 0.12;
+          const staggerWindow = 0.55;
+          const staggerStep =
+            actions.length > 1 ? (1 - staggerWindow) / (actions.length - 1) : 0;
+          const staggerStart = index * staggerStep;
+          const staggerEnd = Math.min(staggerStart + staggerWindow, 1);
           const itemProgress = expandAnim.interpolate({
-            inputRange: [0, staggerStart, staggerStart + 0.55, 1],
-            outputRange: [0, 0, 0.6, 1],
+            inputRange: [0, staggerStart, staggerEnd],
+            outputRange: [0, 0, 1],
             extrapolate: "clamp",
           });
           const translateY = itemProgress.interpolate({
@@ -328,6 +351,38 @@ function ActionFabIcon(props: { tint: string; icon: ActionFabIconName }) {
     );
   }
 
+  if (props.icon === "toggle-highlights") {
+    return (
+      <View style={styles.toggleHighlightIcon}>
+        <View style={styles.toggleHighlightIconBars}>
+          <View
+            style={[styles.highlightIconBar, { backgroundColor: props.tint }]}
+          />
+          <View
+            style={[
+              styles.highlightIconBar,
+              styles.highlightIconBarMid,
+              { backgroundColor: props.tint },
+            ]}
+          />
+          <View
+            style={[
+              styles.highlightIconBar,
+              styles.highlightIconBarShort,
+              { backgroundColor: props.tint },
+            ]}
+          />
+        </View>
+        <View
+          style={[
+            styles.toggleHighlightStrike,
+            { backgroundColor: props.tint },
+          ]}
+        />
+      </View>
+    );
+  }
+
   if (props.icon === "clear-highlights") {
     return (
       <View style={styles.clearHighlightIcon}>
@@ -493,6 +548,24 @@ const styles = StyleSheet.create({
     height: 14,
     alignItems: "center",
     justifyContent: "center",
+  },
+  toggleHighlightIcon: {
+    width: 18,
+    height: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  toggleHighlightIconBars: {
+    width: 18,
+    height: 14,
+    justifyContent: "space-between",
+  },
+  toggleHighlightStrike: {
+    position: "absolute",
+    width: 17,
+    height: 2.5,
+    borderRadius: 2,
+    transform: [{ rotate: "-45deg" }],
   },
   clearHighlightIconBars: {
     width: 18,
