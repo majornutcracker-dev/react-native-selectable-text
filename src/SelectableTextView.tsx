@@ -216,6 +216,13 @@ const SelectableTextView = React.forwardRef<
     });
   };
 
+  const unfocusHighlight = () => {
+    _postMessage({
+      type: BridgingNames.functions.unfocusHighlight,
+      value: undefined,
+    });
+  };
+
   const unhighlightById = (id: string) => {
     _postMessage({
       type: BridgingNames.functions.unhighlightById,
@@ -334,6 +341,7 @@ const SelectableTextView = React.forwardRef<
     getHighlights,
     clearHighlights,
     focusHighlight,
+    unfocusHighlight,
     unhighlightById,
     getAllHighlightsData,
     getHighlightsVisibilityState,

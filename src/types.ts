@@ -152,6 +152,11 @@ export type SelectableTextViewRef = {
    */
   focusHighlight: (id: string) => void;
   /**
+   * A function that removes the outline from the currently focused highlight.
+   * Use after `focusHighlight` to clear the visual focus state without removing the highlight.
+   */
+  unfocusHighlight: () => void;
+  /**
    * A function that removes a highlight by its id
    * @param id
    */
@@ -278,6 +283,7 @@ export const BridgingNames = {
     unhighlightSelection: "unhighlightSelection",
     clearHighlights: "clearHighlights",
     focusHighlight: "focusHighlight",
+    unfocusHighlight: "unfocusHighlight",
     unhighlightById: "unhighlightById",
   },
   // out

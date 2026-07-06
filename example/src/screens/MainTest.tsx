@@ -102,6 +102,10 @@ const guideContent: HTMLString = `
           "All Highlights Data" action opens a dedicated screen listing this payload.
         </li>
         <li><code>focusHighlight(id)</code> — scrolls to a highlight by id and outlines it (notes sheet "Focus").</li>
+        <li>
+          <code>unfocusHighlight()</code> — removes the outline from the currently focused highlight without
+          deleting it (notes sheet close).
+        </li>
         <li><code>unhighlightById(id)</code> — removes a single highlight by id (notes sheet "Unhighlight").</li>
         <li>
           <code>getHighlightsVisibilityState()</code> — returns <code>true</code> when highlights are visible
@@ -323,7 +327,10 @@ export default function MainTest() {
       />
       <NotesBottomSheet
         visible={visibleNote}
-        onClose={() => setVisibleNote(false)}
+        onClose={() => {
+          selectableTextViewRef.current?.unfocusHighlight();
+          setVisibleNote(false);
+        }}
         highlight={pressedHighlight}
         colorClasses={colorClasses}
         onFocusHighlight={(id) => {

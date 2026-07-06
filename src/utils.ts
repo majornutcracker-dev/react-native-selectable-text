@@ -389,6 +389,7 @@ export const htmlContent = ({
           unhighlightSelection: "unhighlightSelection",
           clearHighlights: "clearHighlights",
           focusHighlight: "focusHighlight",
+          unfocusHighlight: "unfocusHighlight",
           unhighlightById: "unhighlightById",
         },
         // out
@@ -422,6 +423,8 @@ export const htmlContent = ({
           clearHighlights();
         } else if (type === BridgingNames.functions.focusHighlight) {
           focusHighlight(value); // id
+        } else if (type === BridgingNames.functions.unfocusHighlight) {
+          unfocusHighlight();
         } else if (type === BridgingNames.functions.unhighlightById) {
           unhighlightById(value); // id
         } else if (type === BridgingNames.promises.getSelectedText) {
@@ -668,7 +671,7 @@ export const htmlContent = ({
         }
       }
 
-      // @sdk-internal-with-event
+      // @sdk-internal
       function focusHighlight(id) {
         try {
           const highlight = findHighlightById(id);
@@ -693,6 +696,11 @@ export const htmlContent = ({
             e?.message ?? String(e)
           );
         }
+      }
+
+      // @sdk-internal
+      function unfocusHighlight() {
+        clearHighlightOutline();
       }
 
       // @sdk-internal-with-event
