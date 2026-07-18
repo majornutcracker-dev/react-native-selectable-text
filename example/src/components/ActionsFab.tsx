@@ -122,6 +122,23 @@ export function ActionsFab(props: ActionsFabProps) {
       },
     },
     {
+      key: "visibility-state",
+      label: "Visibility State",
+      tint: "#0EA5E9",
+      icon: "toggle-highlights",
+      onPress: async () => {
+        try {
+          const visible =
+            await props.selectableTextViewRef.current?.getHighlightsVisibilityState();
+          showToast(
+            visible ? "Highlights are visible" : "Highlights are hidden"
+          );
+        } catch (error) {
+          showToast(error instanceof Error ? error.message : "Unknown error");
+        }
+      },
+    },
+    {
       key: "clear-highlights",
       label: "Clear Highlights",
       tint: "#EF4444",

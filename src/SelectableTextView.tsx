@@ -61,7 +61,7 @@ const SelectableTextView = React.forwardRef<
   });
 
   const handleMessage = React.useCallback(
-    (event: any) => {
+    async (event: any) => {
       const data = JSON.parse(event.nativeEvent.data) as Message;
       if (data.type === BridgingNames.events.onHighlightsChange) {
         onHighlightsChange?.(data.value as string);
@@ -113,7 +113,19 @@ const SelectableTextView = React.forwardRef<
       } else if (data.type === BridgingNames.events.onError) {
         onError?.(data.value as SelectableTextViewError);
       } else if (data.type === BridgingNames.events.onHighlightPressed) {
-        onHighlightPressed?.(data.value as HighlightData);
+        const className = await onHighlightPressed?.(
+          data.value as HighlightData
+        );
+        if (className) {
+          _postMessage({
+            type: BridgingNames.functions.focusHighlight,
+            value: {
+              id: data.value.id,
+              className,
+              scroll: false,
+            },
+          });
+        }
       } else if (
         data.type === BridgingNames.promises.getHighlightsVisibilityState
       ) {
@@ -196,6 +208,17 @@ const SelectableTextView = React.forwardRef<
     });
   };
 
+  const highlightSelectionWithValidation = async (
+    validation: (text: string) => boolean | Promise<boolean>,
+    highlighterName?: HighlighterName
+  ) => {
+    const text = await getSelectedText();
+    const result = await validation(text);
+    if (result) {
+      highlightSelection(highlighterName);
+    }
+  };
+
   const unhighlightSelection = () => {
     _postMessage({
       type: BridgingNames.functions.unhighlightSelection,
@@ -210,10 +233,13 @@ const SelectableTextView = React.forwardRef<
     });
   };
 
-  const focusHighlight = (id: string) => {
+  const focusHighlight = (id: string, className?: string) => {
     _postMessage({
       type: BridgingNames.functions.focusHighlight,
-      value: id,
+      value: {
+        id,
+        className,
+      },
     });
   };
 
@@ -337,6 +363,7 @@ const SelectableTextView = React.forwardRef<
 
   React.useImperativeHandle(ref, () => ({
     highlightSelection,
+    highlightSelectionWithValidation,
     unhighlightSelection,
     getSelectedText,
     getHighlights,

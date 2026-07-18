@@ -8,6 +8,7 @@ import {
 } from "./rangy@1.3.2";
 import {
   Highlighter,
+  AnimationOptions,
   CSSString,
   HTMLString,
   HighlighterOptions,
@@ -224,48 +225,58 @@ function toCssLength(
   return typeof value === "number" ? `${value}px` : value;
 }
 
+function animationToCSS(animation?: AnimationOptions): string {
+  if (!animation) {
+    return "";
+  }
+  return `animation: ${animation.name} ${animation.duration} ${animation.timingFunction} ${animation.iterationCount};`;
+}
+
 function highlightersToCSS(list: Highlighter[]): string {
   return list
-    .map((c) => {
-      const name = c.name;
-      const options = c.options;
-      if (options.type === "background-color") {
-        return `.${name} { background-color: ${options.color}; }`;
-      } else if (options.type === "text-decoration-color") {
-        return `
-        .${name} { 
-          text-decoration-color: ${options.color}; 
-          text-decoration-line: ${options.line ?? "underline"}; 
-          text-decoration-style: ${options.style ?? "solid"};
-          text-decoration-thickness: ${toCssLength(options.thickness, "2px")};
-          text-underline-offset: ${toCssLength(options.offset, "2px")};
-        }`;
-      } else if (options.type === "outline-color") {
-        return `
-        .${name} {
-          outline-color: ${options.color}; 
-          outline-style: ${options.style ?? "solid"};
-          outline-width: ${toCssLength(options.width, "2px")};
-          outline-offset: ${toCssLength(options.offset, "2px")};
-        }`;
-      } else if (options.type === "background-image") {
-        return `
-        .${name} {
-          background-image: ${options.image};
-          background-size: ${options.size ?? "auto"};
-          background-position: ${options.position ?? "left"};
-          background-repeat: ${options.repeat ?? "no-repeat"};
-          ${
-            options.animation
-              ? `animation: ${options.animation.name} ${options.animation.duration} ${options.animation.timingFunction} ${options.animation.iterationCount};`
-              : ""
-          }
-        }
-
-        ${options.animation?.keyframesCss ?? ""}
-        `;
+    .map(({ name, options }) => {
+      const declarations: string[] = [];
+      switch (options.type) {
+        case "background-color":
+          declarations.push(`background-color: ${options.color};`);
+          break;
+        case "text-decoration-color":
+          declarations.push(
+            `text-decoration-color: ${options.color};`,
+            `text-decoration-line: ${options.line ?? "underline"};`,
+            `text-decoration-style: ${options.style ?? "solid"};`,
+            `text-decoration-thickness: ${toCssLength(options.thickness, "2px")};`,
+            `text-underline-offset: ${toCssLength(options.offset, "2px")};`
+          );
+          break;
+        case "outline-color":
+          declarations.push(
+            `outline-color: ${options.color};`,
+            `outline-style: ${options.style ?? "solid"};`,
+            `outline-width: ${toCssLength(options.width, "2px")};`,
+            `outline-offset: ${toCssLength(options.offset, "2px")};`
+          );
+          break;
+        case "background-image":
+          declarations.push(
+            `background-image: ${options.image};`,
+            `background-size: ${options.size ?? "auto"};`,
+            `background-position: ${options.position ?? "left"};`,
+            `background-repeat: ${options.repeat ?? "no-repeat"};`
+          );
+          break;
+        default:
+          return `.${name} {}`;
       }
-      return `.${name} { }`;
+
+      const animationRule = animationToCSS(options.animation);
+      if (animationRule) {
+        declarations.push(animationRule);
+      }
+
+      const rule = `.${name} {\n  ${declarations.join("\n  ")}\n}`;
+      const keyframes = options.animation?.keyframesCss ?? "";
+      return keyframes ? `${rule}\n${keyframes}` : rule;
     })
     .join("\n");
 }
@@ -359,12 +370,15 @@ export const htmlContent = ({
         width: 100%;
       }
       ${cssClasses}
-      .highlighter-hidden { 
+      .mnst-highlighter-hidden {
         background-color: transparent !important;
         background-image: none !important;
         outline-color: transparent !important;
         text-decoration-color: transparent !important;
         animation: none !important;
+      }
+      .mnst-default-focus {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
       }
     </style>
   </head>
@@ -404,7 +418,7 @@ export const htmlContent = ({
         window.__MNST__ = {
           // state
           state: {
-            outlinedElements: [],
+            focusedElements: [],
             visible: true,
             highlights: "type:textContent",
           },
@@ -482,7 +496,7 @@ export const htmlContent = ({
         } else if (type === BridgingNames.functions.clearHighlights) {
           clearHighlights();
         } else if (type === BridgingNames.functions.focusHighlight) {
-          focusHighlight(value); // id
+          focusHighlight(value.id, value.className, value.scroll); // id, className, scroll
         } else if (type === BridgingNames.functions.unfocusHighlight) {
           unfocusHighlight();
         } else if (type === BridgingNames.functions.unhighlightById) {
@@ -600,7 +614,7 @@ export const htmlContent = ({
           return;
         }
         try {
-          clearHighlightOutline();
+          clearHighlightFocusStyle();
           __MNST__.highlighter.removeAllHighlights();
           __MNST__.highlighter.deserialize(highlights);
           clearIgnoredElementsBackgroundColors();
@@ -703,7 +717,7 @@ export const htmlContent = ({
             );
             return;
           }
-          clearHighlightOutline();
+          clearHighlightFocusStyle();
           __MNST__.highlighter.unhighlightSelection();
           clearIgnoredElementsBackgroundColors();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
@@ -721,7 +735,7 @@ export const htmlContent = ({
         try {
           __MNST__.highlighter.removeAllHighlights();
           clearIgnoredElementsBackgroundColors();
-          clearHighlightOutline();
+          clearHighlightFocusStyle();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
           sendOnError(
@@ -733,7 +747,7 @@ export const htmlContent = ({
       }
 
       // @sdk-internal
-      function focusHighlight(id) {
+      function focusHighlight(id, className, scroll) {
         try {
           const highlight = findHighlightById(id);
           if (!highlight) {
@@ -744,11 +758,11 @@ export const htmlContent = ({
             );
             return;
           }
-          clearHighlightOutline();
+          clearHighlightFocusStyle();
           const elements = highlight.getHighlightElements();
-          applyOutline(elements);
-          if (elements.length > 0 && elements[0].scrollIntoView) {
-            elements[0].scrollIntoView({ behavior: "smooth", block: "center" });
+          applyFocusStyle(elements, className);
+          if (scroll !== false && elements.length > 0 && elements[0].scrollIntoView) {
+            elements[0].scrollIntoView({ behavior: "smooth", block: "start" });
           }
         } catch (e) {
           sendOnError(
@@ -761,7 +775,7 @@ export const htmlContent = ({
 
       // @sdk-internal
       function unfocusHighlight() {
-        clearHighlightOutline();
+        clearHighlightFocusStyle();
       }
 
       // @sdk-internal-with-event
@@ -776,7 +790,7 @@ export const htmlContent = ({
             );
             return;
           }
-          clearHighlightOutline();
+          clearHighlightFocusStyle();
           __MNST__.highlighter.removeHighlights([highlight]);
           clearIgnoredElementsBackgroundColors();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
@@ -843,7 +857,7 @@ export const htmlContent = ({
       // @sdk-internal-with-resolve
       function toggleHighlightsVisibility(id) {
         try {
-          clearHighlightOutline();
+          clearHighlightFocusStyle();
           const toggle = applyHighlightVisibilityClass(true, false);
           __MNST__.state.visible = toggle;
           sendToggleHighlightsVisibility(id, true, __MNST__.state.visible, undefined);
@@ -854,12 +868,12 @@ export const htmlContent = ({
       }
 
       // @sdk-internal-with-event
-      function outlineHighlightFromElement(element) {
+      function prepareSendOnHighlightPressed(element) {
         const highlight = __MNST__.highlighter.getHighlightForElement(element);
         if (!highlight) {
           return;
         }
-        const text = applyOutline(highlight.getHighlightElements());
+        const text = getTextFromElements(highlight.getHighlightElements());
         sendOnHighlightPressed(highlight, text);
       }
 
@@ -880,11 +894,11 @@ export const htmlContent = ({
         const condition = inverse ? !visible: visible;
         if (condition) {
           nodes.forEach((node) => {
-            node.classList.add("highlighter-hidden");
+            node.classList.add("mnst-highlighter-hidden");
           });
         } else {
           nodes.forEach((node) => {
-            node.classList.remove("highlighter-hidden");
+            node.classList.remove("mnst-highlighter-hidden");
           });
         }
         return !visible;
@@ -900,20 +914,26 @@ export const htmlContent = ({
         return null;
       }
 
-      function clearHighlightOutline() {
-        __MNST__.state.outlinedElements.forEach((el) => {
-          el.style.boxShadow = "";
+      function clearHighlightFocusStyle() {
+        __MNST__.state.focusedElements.forEach((entry) => {
+          entry.el.classList.remove(entry.className);
         });
-        __MNST__.state.outlinedElements = [];
+        __MNST__.state.focusedElements = [];
       }
 
-      function applyOutline(elements) {
-        let text = "";
+      function applyFocusStyle(elements, className) {
+        const focusClassName = className || "mnst-default-focus";
         elements.forEach((el) => {
           if(__MNST__.state.visible) {
-            el.style.boxShadow = "0 4px 12px rgba(0,0,0,0.25)";
-            __MNST__.state.outlinedElements.push(el);
+            el.classList.add(focusClassName);
+            __MNST__.state.focusedElements.push({ el, className: focusClassName });
           }
+        });
+      }
+
+      function getTextFromElements(elements) {
+        let text = "";
+        elements.forEach((el) => {
           text += el.textContent ?? "";
         });
         return text;
@@ -1045,10 +1065,10 @@ export const htmlContent = ({
               ? target.closest(selector)
               : null;
 
-          clearHighlightOutline();
+          clearHighlightFocusStyle();
 
           if (node) {
-            outlineHighlightFromElement(node);
+            prepareSendOnHighlightPressed(node);
           }
         });
       }

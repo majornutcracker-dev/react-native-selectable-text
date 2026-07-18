@@ -49,6 +49,20 @@ export type SelectableTextViewFonts = {
 
 export type HighlighterName = string;
 
+export type AnimationOptions = {
+  keyframesCss: string;
+  name: string;
+  duration: string;
+  timingFunction:
+    | "linear"
+    | "ease"
+    | "ease-in"
+    | "ease-out"
+    | "ease-in-out"
+    | string;
+  iterationCount: number | "infinite";
+};
+
 export type HighlighterType =
   | "background-color"
   | "text-decoration-color"
@@ -58,6 +72,7 @@ export type HighlighterType =
 export type HighlighterBackgroundColorOption = {
   type: "background-color";
   color: string;
+  animation?: AnimationOptions;
 };
 
 export type HighlighterTextDecorationColorOption = {
@@ -67,6 +82,7 @@ export type HighlighterTextDecorationColorOption = {
   thickness?: number;
   offset?: number;
   style?: "solid" | "double" | "dotted" | "dashed" | "wavy";
+  animation?: AnimationOptions;
 };
 
 export type HighlighterOutlineColorOption = {
@@ -83,6 +99,7 @@ export type HighlighterOutlineColorOption = {
     | "ridge"
     | "inset"
     | "outset";
+  animation?: AnimationOptions;
 };
 
 export type HighlighterBackgroundImageOption = {
@@ -91,19 +108,7 @@ export type HighlighterBackgroundImageOption = {
   position?: "left" | "center" | "right" | "top" | "bottom" | string;
   repeat?: "no-repeat" | "repeat" | "repeat-x" | "repeat-y" | string;
   size?: "auto" | "cover" | "contain" | string;
-  animation?: {
-    keyframesCss: string;
-    name: string;
-    duration: string;
-    timingFunction:
-      | "linear"
-      | "ease"
-      | "ease-in"
-      | "ease-out"
-      | "ease-in-out"
-      | string;
-    iterationCount: number | "infinite";
-  };
+  animation?: AnimationOptions;
 };
 
 export type Highlighter = {
@@ -187,9 +192,19 @@ export type SelectableTextViewRef = {
   /**
    * A function that applies highlighting to the current selection with a highlighter name previously defined in the highlighters property;
    * if it is not defined, the highlighting will not be applied.
-   * @param name
+   * @param name The name of the highlighter to apply to the selection.
    */
   highlightSelection: (name?: HighlighterName) => void;
+  /**
+   * A function that applies highlighting to the current selection with a highlighter name previously defined in the highlighters property;
+   * if it is not defined, the highlighting will not be applied.
+   * @param name The name of the highlighter to apply to the selection.
+   * @param validation A callback function that will be called with the text of the selection if return true the highlighting will be applied.
+   */
+  highlightSelectionWithValidation: (
+    validation: (text: string) => boolean | Promise<boolean>,
+    name?: HighlighterName
+  ) => Promise<void>;
   /**
    * A function that removes the highlighting from the current selection
    */
@@ -212,12 +227,16 @@ export type SelectableTextViewRef = {
   getHighlights: () => Promise<Highlights>;
   /**
    * A function that focuses on a highlight by its id
-   * Scrolls the content to the highlight and focuses on it
-   * @param id
+   * Scrolls the content to the highlight and applies the focus style to it
+   * You can add important! to the backgroundColor to ensure it overrides the default background color.
+   * Or disable image background by setting the backgroundImage to none.
+   * @param id The id of the highlight
+   * @param className The className to apply to the highlight, you can styles for this className in the css property.
+   * If omitted, a default focus style (a box-shadow) is applied.
    */
-  focusHighlight: (id: string) => void;
+  focusHighlight: (id: string, className?: string) => void;
   /**
-   * A function that removes the outline from the currently focused highlight.
+   * A function that removes the focus style from the currently focused highlight.
    * Use after `focusHighlight` to clear the visual focus state without removing the highlight.
    */
   unfocusHighlight: () => void;
@@ -254,7 +273,7 @@ export type SelectableTextViewPropsBase = {
    * A list of Highlighter, each with a unique name and an options object describing how to render the highlight
    * (background-color, text-decoration-color, outline-color or background-image).
    * The name is used as the className of the tag that wraps the selection, so in the css property you can add
-   * more styles. If names are repeated, the last one will be chosen.
+   * more styles that not support by the Highlighter.options. If names are repeated, the last one will be chosen.
    * @default [{ name: "yellow-highlighter", options: { type: "background-color", color: "yellow" } }]
    */
   highlighters?: Highlighter[];
@@ -333,8 +352,13 @@ export type SelectableTextViewPropsBase = {
    * Called when a highlight is pressed.
    * The payload includes the id of the highlight, the name of the highlight and the text of the highlight.
    * @param highlight
+   * @returns The className to apply to the highlight a focus style, you can styles for this className in the css property or return void to not apply any style.
+   * The focus style is applied in place (without scrolling); use `focusHighlight(id)` if you also want to scroll to it.
+   * The callback may be async: return a `Promise` and the resolved className (if any) is applied.
    */
-  onHighlightPressed?: (highlight: HighlightData) => void;
+  onHighlightPressed?: (
+    highlight: HighlightData
+  ) => string | void | Promise<string | void>;
 };
 
 export type Message = {

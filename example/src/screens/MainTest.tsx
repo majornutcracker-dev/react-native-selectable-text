@@ -82,6 +82,7 @@ const guideContent: HTMLString = `
           <code>onHighlightPressed</code> — fired when a highlight is tapped. Payload:
           <code>id</code>, <code>name</code>, and <code>text</code>. In this demo it opens
           the notes sheet; tap any existing highlight to try it.
+          Returns the className to apply to the highlight, you can styles for this className in the css property or return void to not apply any style.
         </li>
       </ul>
     </section>
@@ -90,6 +91,11 @@ const guideContent: HTMLString = `
       <h2 id="ref">Ref API</h2>
       <ul>
         <li><code>highlightSelection(name?)</code> — applies the active color to the cached selection.</li>
+        <li>
+          <code>highlightSelectionWithValidation(validation, name?)</code> — highlights only if
+          <code>validation(text)</code> returns (or resolves to) <code>true</code>. Try the
+          "Highlight (4+ chars)" item in the native menu with a short selection.
+        </li>
         <li><code>unhighlightSelection()</code> — removes highlight from the cached selection.</li>
         <li><code>clearHighlights()</code> — removes all highlights from the content (left FAB).</li>
         <li><code>getSelectedText()</code> — returns the cached selected text (left FAB).</li>
@@ -99,9 +105,9 @@ const guideContent: HTMLString = `
           <code>{ id, name, text }</code> for every highlight. The left FAB
           "All Highlights Data" action opens a dedicated screen listing this payload.
         </li>
-        <li><code>focusHighlight(id)</code> — scrolls to a highlight by id and outlines it (notes sheet "Focus").</li>
+        <li><code>focusHighlight(id, className?)</code> — scrolls to a highlight by id and applies the focus style to it; pass a <code>className</code> to style it via the css property, or omit it for the default focus style (notes sheet "Focus").</li>
         <li>
-          <code>unfocusHighlight()</code> — removes the outline from the currently focused highlight without
+          <code>unfocusHighlight()</code> — removes the focus style from the currently focused highlight without
           deleting it (notes sheet close).
         </li>
         <li><code>unhighlightById(id)</code> — removes a single highlight by id (notes sheet "Unhighlight").</li>
@@ -160,12 +166,19 @@ const guideContent: HTMLString = `
 `;
 
 const cssContent: CSSString = `
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
 .content {
   font-family: "Source Sans 3", sans-serif;
   font-optical-sizing: auto;
   line-height: 1.6;
   font-size: 14px;
   background-color: #fff;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .content section {
   margin-bottom: 1.25rem;
@@ -212,6 +225,45 @@ const cssContent: CSSString = `
   border-left: 3px solid #e5e5e5;
   padding-left: 0.75rem;
 }
+.focus-highlight {
+  display: inline-block;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+  animation: focus-highlight-animation 500ms ease-out;
+}
+@keyframes focus-highlight-animation {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.${highlighters[0].name} {
+  background-image:
+    radial-gradient(circle, rgba(255,255,255,.8) 2px, transparent 3px),
+    radial-gradient(circle, rgba(255,255,255,.6) 3px, transparent 4px),
+    radial-gradient(circle, rgba(255,255,255,.7) 2px, transparent 3px);
+  background-size: 30px 30px, 40px 40px, 35px 35px;
+  background-position: 10% 100%, 50% 100%, 80% 100%;
+  animation: bubbles 2s linear infinite;
+}
+@keyframes bubbles {
+  from {
+    background-position:
+      10% 100%,
+      50% 100%,
+      80% 100%;
+  }
+  to {
+    background-position:
+      10% -100%,
+      50% -100%,
+      80% -100%;
+  }
+}
 `;
 
 const contentFonts = googleFonts({
@@ -244,6 +296,10 @@ export default function MainTest() {
                 label: "Highlight",
               },
               {
+                key: "highlight-validated",
+                label: "Highlight (4+ chars)",
+              },
+              {
                 key: "unhighlight",
                 label: "Unhighlight",
               },
@@ -256,6 +312,19 @@ export default function MainTest() {
               const key = event.nativeEvent.key;
               if (key === "highlight") {
                 selectableTextViewRef.current?.highlightSelection(
+                  currentHighlighterName
+                );
+              } else if (key === "highlight-validated") {
+                selectableTextViewRef.current?.highlightSelectionWithValidation(
+                  (text) => {
+                    const valid = text.trim().length >= 4;
+                    if (!valid) {
+                      showToast(
+                        "Selection too short to highlight (min 4 chars)"
+                      );
+                    }
+                    return valid;
+                  },
                   currentHighlighterName
                 );
               } else if (key === "unhighlight") {
@@ -307,6 +376,7 @@ export default function MainTest() {
           onHighlightPressed={(highlight) => {
             setPressedHighlight(highlight);
             setVisibleNote(true);
+            return "focus-highlight";
           }}
         />
       </Group>
@@ -332,7 +402,7 @@ export default function MainTest() {
         highlight={pressedHighlight}
         onFocusHighlight={(id) => {
           setVisibleNote(false);
-          selectableTextViewRef.current?.focusHighlight(id);
+          selectableTextViewRef.current?.focusHighlight(id, "focus-highlight");
         }}
         onUnhighlight={(id) => {
           selectableTextViewRef.current?.unhighlightById(id);

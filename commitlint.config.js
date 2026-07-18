@@ -14,8 +14,14 @@ export default {
         "test",
         "chore",
         "build",
+        "ci",
+        "bump",
       ],
     ],
-    "subject-case": [2, "always", "lower-case"],
+    "subject-case": [
+      2,
+      "never",
+      ["sentence-case", "start-case", "pascal-case", "upper-case"],
+    ],
   },
 };
