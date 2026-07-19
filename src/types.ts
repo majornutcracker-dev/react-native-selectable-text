@@ -354,6 +354,12 @@ export type SelectableTextViewPropsBase = {
   onHighlightPressed?: (
     highlight: HighlightData
   ) => string | void | Promise<string | void>;
+  /**
+   * --> State property
+   * Called when the highlights visibility state changes.
+   * @param visibilityState
+   */
+  onHighlightsVisibilityStateChange?: (visibilityState: boolean) => void;
 };
 
 export type Message = {
@@ -378,6 +384,7 @@ export const BridgingNames = {
     onHighlightsChange: "onHighlightsChange",
     onError: "onError",
     onHighlightPressed: "onHighlightPressed",
+    onHighlightsVisibilityStateChange: "onHighlightsVisibilityStateChange",
     // dev
     log: "log",
   },
@@ -392,46 +399,3 @@ export const BridgingNames = {
 };
 
 export const VERSION = "1.0.0";
-
-/*
-
-export type RootBlocks = (ListBlock | HeadingBlock | ParagraphBlock)[];
-
-export interface TextBlock {
-  type: "text";
-  text: string;
-  bold?: boolean;
-  italic?: boolean;
-  underline?: boolean;
-  strikethrough?: boolean;
-  code?: boolean;
-}
-
-export interface ListBlock {
-  type: "list";
-  format: "ordered" | "unordered";
-  children: (ListBlock | ListItemBlock)[];
-}
-
-export interface ListItemBlock {
-  type: "list-item";
-  children: (TextBlock | LinkBlock)[];
-}
-
-export interface LinkBlock {
-  type: "link";
-  url: string;
-  children: TextBlock[];
-}
-
-export interface HeadingBlock {
-  type: "heading";
-  level: 1 | 2 | 3 | 4 | 5 | 6;
-  children: (TextBlock | LinkBlock)[];
-}
-
-export interface ParagraphBlock {
-  type: "paragraph";
-  children: (TextBlock | LinkBlock)[];
-}
-*/

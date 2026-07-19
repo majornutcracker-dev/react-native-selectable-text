@@ -84,6 +84,11 @@ const guideContent: HTMLString = `
           the notes sheet; tap any existing highlight to try it.
           Returns the className to apply to the highlight, you can styles for this className in the css property or return void to not apply any style.
         </li>
+        <li>
+          <code>onHighlightsVisibilityStateChange</code> — fired whenever highlight
+          visibility changes (e.g. the left FAB "Hide/Show Highlights"); receives
+          <code>true</code> when visible, <code>false</code> when hidden. This demo shows a toast.
+        </li>
       </ul>
     </section>
 
@@ -377,6 +382,9 @@ export default function MainTest() {
             setPressedHighlight(highlight);
             setVisibleNote(true);
             return "focus-highlight";
+          }}
+          onHighlightsVisibilityStateChange={(visible) => {
+            showToast(visible ? "Highlights visible" : "Highlights hidden");
           }}
         />
       </Group>

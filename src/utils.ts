@@ -420,7 +420,6 @@ export const htmlContent = ({
           state: {
             focusedElements: [],
             visible: true,
-            highlights: "type:textContent",
           },
           // constants
           platform: {
@@ -472,6 +471,7 @@ export const htmlContent = ({
           onHighlightsChange: "onHighlightsChange",
           onError: "onError",
           onHighlightPressed: "onHighlightPressed",
+          onHighlightsVisibilityStateChange: "onHighlightsVisibilityStateChange",
           // dev
           log: "log",
         },
@@ -554,6 +554,11 @@ export const htmlContent = ({
           name: highlights.classApplier.className,
           text: text ?? "",
         });
+      }
+
+      // @native-event
+      function sendOnHighlightsVisibilityStateChange(visibilityState) {
+        postMessage(BridgingNames.events.onHighlightsVisibilityStateChange, visibilityState);
       }
 
       // @native-promise-resolve
@@ -860,6 +865,7 @@ export const htmlContent = ({
           clearHighlightFocusStyle();
           const toggle = applyHighlightVisibilityClass(true, false);
           __MNST__.state.visible = toggle;
+          sendOnHighlightsVisibilityStateChange(__MNST__.state.visible);
           sendToggleHighlightsVisibility(id, true, __MNST__.state.visible, undefined);
         } catch (e) {
           console.error("Failed to toggle highlights visibility: ", e);
@@ -1041,15 +1047,23 @@ export const htmlContent = ({
           e.preventDefault();
           const selection = __MNST__.selector.getSelected();
           if (!selection || selection.toString().trim() === "") {
-            __MNST__.selector.cache.text = "";
+            const prev =__MNST__.selector.cache.text;
+            const next = "";
+            __MNST__.selector.cache.text = next;
             __MNST__.selector.cache.range = null;
-            sendOnTextSelectionChange("");
+            if (prev !== next) {
+              sendOnTextSelectionChange(next);
+            }
           } else {
-            __MNST__.selector.cache.text = selection.toString();
+            const prev =__MNST__.selector.cache.text;
+            const next = selection.toString();
+            __MNST__.selector.cache.text = next;
             if (selection.rangeCount > 0) {
               __MNST__.selector.cache.range = selection.getRangeAt(0).cloneRange();
             }
-            sendOnTextSelectionChange(__MNST__.selector.cache.text);
+            if (prev !== next) {
+              sendOnTextSelectionChange(next);
+            }
           }
         });
 
@@ -1079,163 +1093,3 @@ export const htmlContent = ({
 </html>
 `;
 };
-
-/*
-function parseActions(actions: Action[] | undefined): string {
-  let html = "";
-  if (!actions) {
-    html = html.concat(
-      `<button onclick="sendAction({ value : 'highlight', label : 'Highlight' }, event)">Highlight</button>`
-    );
-    html = html.concat(
-      `<button onclick="sendAction({ value : 'unhighlight', label : 'Unhighlight' }, event)">Unhighlight</button>`
-    );
-  } else {
-    actions.forEach((a) => {
-  html = html.concat(
-    `<button onclick="sendAction({ value : '${a.value}', label : '${a.label}' }, event)">${a.label}</button>`
-  );
-});
-}
-return html;
-}
-
-export function blocksRenderer(content: RootBlocks | undefined): string {
-  return `
-    <div class="content">
-      ${content?.map((block, index) => blockRenderer(block, index)).join("")}
-    </div>
-  `;
-}
-
-const blocks = {
-  heading: ({ level, children }: HeadingBlock, index: number) =>
-    `
-      <h${level} data-key="${index}">
-        ${children.map((c, i) => inlineRenderer(c, i)).join("")}
-      </h${level}>
-    `,
-
-  paragraph: ({ children }: ParagraphBlock, index: number) =>
-    `
-      <p data-key="${index}">
-        ${children.map((c, i) => inlineRenderer(c, i)).join("")}
-      </p>
-    `,
-
-  list: ({ children, format }: ListBlock, index: number) => {
-    const tag = format === "ordered" ? "ol" : "ul";
-    return `
-      <${tag} data-key="${index}">
-        ${children.map((c, i) => blockRenderer(c, i)).join("")}
-      </${tag}>
-    `;
-  },
-
-  "list-item": ({ children }: ListItemBlock, index: number) => {
-    return `
-      <li data-key="${index}">
-        ${children.map((c, i) => inlineRenderer(c, i)).join("")}
-      </li>
-    `;
-  },
-};
-
-function blockRenderer(
-  block: RootBlocks[number] | ListItemBlock | undefined,
-  index: number
-): string {
-  if (!block) return "";
-  return blocks[block.type](block as any, index) ?? "";
-}
-
-function inlineRenderer(block: TextBlock | LinkBlock, index: number): string {
-  if (block.type === "text") {
-    let html = escapeHtml(block.text);
-
-    if (block.code) html = `<code>${html}</code>`;
-    if (block.strikethrough) html = `<s>${html}</s>`;
-    if (block.underline) html = `<u>${html}</u>`;
-    if (block.italic) html = `<em>${html}</em>`;
-    if (block.bold) html = `<strong>${html}</strong>`;
-
-    return html;
-  }
-
-  if (block.type === "link") {
-    const isLink =
-      block.url.startsWith("https://") || block.url.startsWith("http://");
-    const childrenHTML = block.children
-      .map((c, i) => inlineRenderer(c, i))
-      .join("");
-
-    if (isLink) {
-      return `<a href="${block.url}" data-key="${index}">${childrenHTML}</a>`;
-    } else {
-      return "";
-    }
-  }
-
-  return "";
-}
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-export const blocksStyle = `
-.content {
-  font-family: system-ui, sans-serif;
-  line-height: 1.6;
-  font-size: 16px;
-  color: #000000ff;
-}
-
-.content p {
-  margin: 0.75em 0;
-}
-
-.content h1,
-.content h2,
-.content h3,
-.content h4,
-.content h5,
-.content h6 {
-  margin: 1.2em 0 0.6em;
-  font-weight: bold;
-}
-
-.content ul,
-.content ol {
-  margin: 1em 2.5em 1em 2.5em;
-  padding: 0;
-}
-
-.content li {
-  margin: 2em 0;
-}
-
-.content a {
-  color: #0645ad;
-  text-decoration: underline;
-}
-
-.content code {
-  font-family: monospace;
-  background: #f4f4f4;
-  padding: 0.2em 0.4em;
-  border-radius: 4px;
-  font-size: 0.95em;
-}
-
-.content sup {
-  font-size: 0.75em;
-  line-height: 0;
-}
-`;
-*/

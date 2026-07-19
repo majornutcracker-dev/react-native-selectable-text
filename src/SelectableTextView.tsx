@@ -15,7 +15,10 @@ import { Linking, Platform } from "react-native";
 import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
 
 export type SelectableTextViewProps = SelectableTextViewPropsBase & {
-  webViewProps?: WebViewProps;
+  webViewProps?: Omit<
+    WebViewProps,
+    "javaScriptEnabled" | "source" | "onShouldStartLoadWithRequest"
+  >;
 };
 
 const SelectableTextView = React.forwardRef<
@@ -35,6 +38,7 @@ const SelectableTextView = React.forwardRef<
     onHighlightsChange,
     onError,
     onHighlightPressed,
+    onHighlightsVisibilityStateChange,
     webViewProps,
   } = props;
   const promises = React.useRef<{
@@ -61,6 +65,7 @@ const SelectableTextView = React.forwardRef<
 
   const handleMessage = React.useCallback(
     async (event: any) => {
+      webViewProps?.onMessage?.(event);
       const data = JSON.parse(event.nativeEvent.data) as Message;
       if (data.type === BridgingNames.events.onHighlightsChange) {
         onHighlightsChange?.(data.value as string);
@@ -159,9 +164,20 @@ const SelectableTextView = React.forwardRef<
           );
         }
         delete promises.current[id];
+      } else if (
+        data.type === BridgingNames.events.onHighlightsVisibilityStateChange
+      ) {
+        onHighlightsVisibilityStateChange?.(data.value as boolean);
       }
     },
-    [onTextSelectionChange, onHighlightsChange, onError]
+    [
+      onTextSelectionChange,
+      onHighlightsChange,
+      onError,
+      onHighlightsVisibilityStateChange,
+      onHighlightPressed,
+      webViewProps?.onMessage,
+    ]
   );
 
   const handleShouldStartLoadWithRequest = React.useCallback(
@@ -380,7 +396,6 @@ const SelectableTextView = React.forwardRef<
       {...webViewProps}
       ref={webviewRef}
       source={finalSource.current}
-      domStorageEnabled={false}
       javaScriptEnabled
       onMessage={handleMessage}
       onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
