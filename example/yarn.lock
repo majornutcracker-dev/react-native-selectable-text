@@ -1287,39 +1287,6 @@
     invariant "^2.2.4"
     nullthrows "^1.1.1"
 
-"@react-navigation/core@^7.21.8":
-  version "7.21.8"
-  resolved "https://registry.yarnpkg.com/@react-navigation/core/-/core-7.21.8.tgz#a8619f7161f5d0bc40a5285a98ba16b913c6e9d1"
-  integrity sha512-jsCLOIgB3eYv7KQsdSpyW2mC0wfInWYAiFVkPn3ZUQJ1FgjwbqY2//JaCWgTRGKBj3uDy36z5SeYx6WIYpweEw==
-  dependencies:
-    "@react-navigation/routers" "^7.6.2"
-    escape-string-regexp "^4.0.0"
-    fast-deep-equal "^3.1.3"
-    nanoid "^3.3.11"
-    query-string "^7.1.3"
-    react-is "^19.1.0"
-    use-latest-callback "^0.2.4"
-    use-sync-external-store "^1.5.0"
-
-"@react-navigation/native@^7.3.0":
-  version "7.3.11"
-  resolved "https://registry.yarnpkg.com/@react-navigation/native/-/native-7.3.11.tgz#766b2430e43dc604d359cff0a1f073436a01dac9"
-  integrity sha512-CWg3lLOVYwnbjPdIzJWrpqSF6F2+1F6QMUvQfLFA6MizwOTUrkZ1w1q7a7m0Pis5ful+EFpoPqHYuLoQ5XmoCw==
-  dependencies:
-    "@react-navigation/core" "^7.21.8"
-    escape-string-regexp "^4.0.0"
-    fast-deep-equal "^3.1.3"
-    nanoid "^3.3.11"
-    standard-navigation "^0.0.8"
-    use-latest-callback "^0.2.4"
-
-"@react-navigation/routers@^7.6.2":
-  version "7.6.2"
-  resolved "https://registry.yarnpkg.com/@react-navigation/routers/-/routers-7.6.2.tgz#a6304628627dbd07535d0f35fb5082e4d8097d0f"
-  integrity sha512-cYzWE/+kcX6RAaX1/peL07f4aIpxeE7uNDr89qJpfGuVz3WHs9dGE1QwbCyCK95fVYn1tvsOmbXbvR0o43uqKQ==
-  dependencies:
-    nanoid "^3.3.11"
-
 "@sinclair/typebox@^0.27.8":
   version "0.27.12"
   resolved "https://registry.yarnpkg.com/@sinclair/typebox/-/typebox-0.27.12.tgz#0cacd3cff047a32936b1ace47ea7c86eaab60a7f"
@@ -2967,7 +2934,7 @@ multitars@^1.0.0:
   resolved "https://registry.yarnpkg.com/multitars/-/multitars-1.0.0.tgz#50828be6b04328242e1c0f8439fbca4f6569e761"
   integrity sha512-H/J4fMLedtudftaYMOg7ajzLYgT3/rwbWVJbqr/iUgB8DQztn38ys5HOqI1CzSxx8QhXXwOOnnBvd4v3jG5+Mg==
 
-nanoid@^3.3.11, nanoid@^3.3.12, nanoid@^3.3.8:
+nanoid@^3.3.12, nanoid@^3.3.8:
   version "3.3.16"
   resolved "https://registry.yarnpkg.com/nanoid/-/nanoid-3.3.16.tgz#a04d8ec4b1f10009d2d533947aefe4293737816c"
   integrity sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==
@@ -3595,11 +3562,6 @@ standard-navigation@^0.0.5:
   resolved "https://registry.yarnpkg.com/standard-navigation/-/standard-navigation-0.0.5.tgz#8ce5fef5a251991f58ed69283bee5cc1d242625e"
   integrity sha512-YAmzwAiiQVocZxO/VGPFiQHcu5pKiz09QIGC0MK6aRMoa3E0QkoTQgcqJr7ZZ3OMiNhu4DkaGElFI5htjOIDbw==
 
-standard-navigation@^0.0.8:
-  version "0.0.8"
-  resolved "https://registry.yarnpkg.com/standard-navigation/-/standard-navigation-0.0.8.tgz#aef79bef130ec8ba0a9c070d3a728d96d68df8a8"
-  integrity sha512-TyVbo7INUDWtsUWDFn8RR7kwR87U0S4xHfLfbbnyeC581TmmyqQ+eM+nPw8rQTSD8QitRVcYfPaSHr/QJiUy1g==
-
 statuses@~1.5.0:
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/statuses/-/statuses-1.5.0.tgz#161c7dac177659fd9811f43771fa99381478628c"
@@ -3822,11 +3784,6 @@ use-sidecar@^1.1.3:
   dependencies:
     detect-node-es "^1.1.0"
     tslib "^2.0.0"
-
-use-sync-external-store@^1.5.0:
-  version "1.6.0"
-  resolved "https://registry.yarnpkg.com/use-sync-external-store/-/use-sync-external-store-1.6.0.tgz#b174bfa65cb2b526732d9f2ac0a408027876f32d"
-  integrity sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==
 
 utils-merge@1.0.1:
   version "1.0.1"
