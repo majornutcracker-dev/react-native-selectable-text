@@ -38,7 +38,7 @@ yarn ios            # or: yarn android
   - `SelectableTextView.tsx` — the React component and its ref API.
   - `utils.ts` — the WebView HTML/JS runtime (the bridge lives here).
   - `types.ts` — public types and `BridgingNames` (the RN ↔ WebView message contract).
-  - `rangy@1.3.2/` — vendored [Rangy](https://github.com/timdown/rangy) (do **not** edit or strip its copyright headers; see [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md)).
+  - `rangy@1.3.2/` — vendored [Rangy](https://github.com/timdown/rangy) (do **not** edit or strip its copyright headers; see [THIRD-PARTY-NOTICES.md](./docs/THIRD-PARTY-NOTICES.md)).
 - `android/`, `ios/` — the native Kotlin/Swift bridge.
 - `example/` — a runnable Expo app used as the manual test bed.
 
@@ -102,6 +102,12 @@ docs: document the highlighters animation option
 3. Run the checks above; make sure the example still builds/runs for a native change.
 4. Update [`CHANGELOG.md`](./CHANGELOG.md) under an "Unreleased" section.
 5. Open the PR with a clear description of the change and how you tested it.
+
+## Releasing
+
+Bumping the version touches several native files, not just `package.json`. See
+[docs/VERSION-UPDATE.md](./docs/VERSION-UPDATE.md) for the full checklist and how to pick a
+patch / minor / major bump.
 
 ## Reporting issues
 

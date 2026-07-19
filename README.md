@@ -220,4 +220,4 @@ Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, w
 
 MIT — see [LICENSE](./LICENSE).
 
-This package bundles [Rangy](https://github.com/timdown/rangy) (© Tim Down, MIT). See [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md).
+This package bundles [Rangy](https://github.com/timdown/rangy) (© Tim Down, MIT). See [THIRD-PARTY-NOTICES.md](./docs/THIRD-PARTY-NOTICES.md).
