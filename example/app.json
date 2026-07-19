@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "react-native-selectable-text-example",
+    "name": "SelectableText",
     "slug": "react-native-selectable-text-example",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,7 +13,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#FEF5DA",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -21,7 +21,18 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.majornutcracker.reactnativeselectablewebview.example"
     },
-    "plugins": ["expo-router", "expo-image"],
+    "plugins": [
+      "expo-router",
+      "expo-image",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FEF5DA",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     }
