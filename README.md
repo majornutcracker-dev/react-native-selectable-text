@@ -214,8 +214,10 @@ A full demo lives in [`example/`](./example) (`MainTest` screen). Open the nativ
 
 ## Contributing
 
-Contributions are welcome. Please follow the guidelines in the [contributing guide](https://github.com/expo/expo#contributing).
+Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, workflow, and commit conventions.
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE).
+
+This package bundles [Rangy](https://github.com/timdown/rangy) (© Tim Down, MIT). See [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md).

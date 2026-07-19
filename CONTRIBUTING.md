@@ -1,0 +1,90 @@
+# Contributing
+
+Thanks for your interest in improving **@majornutcracker/react-native-selectable-text**! This guide covers how to set up the project, the workflow, and the conventions we follow.
+
+By contributing, you agree that your contributions are licensed under the project's [MIT License](./LICENSE).
+
+## Prerequisites
+
+- **Node** — the version is pinned in [`.nvmrc`](./.nvmrc). Run `nvm use` (or install that version).
+- **Yarn 1 (Classic)** — managed via Corepack, pinned through the `packageManager` field. Enable it once per Node version:
+  ```sh
+  corepack enable
+  ```
+- **iOS**: Xcode + CocoaPods. **Android**: Android Studio + JDK. (Only needed to build the native example.)
+
+## Getting started
+
+```sh
+git clone https://github.com/majornutcracker/react-native-selectable-text
+cd react-native-selectable-text
+nvm use
+corepack enable
+yarn install
+yarn build          # compiles the module (expo-module build)
+```
+
+Run the example app:
+
+```sh
+cd example
+yarn install
+yarn ios            # or: yarn android
+```
+
+## Project layout
+
+- `src/` — the module's TypeScript source (the published API).
+  - `SelectableTextView.tsx` — the React component and its ref API.
+  - `utils.ts` — the WebView HTML/JS runtime (the bridge lives here).
+  - `types.ts` — public types and `BridgingNames` (the RN ↔ WebView message contract).
+  - `rangy@1.3.2/` — vendored [Rangy](https://github.com/timdown/rangy) (do **not** edit or strip its copyright headers; see [THIRD-PARTY-NOTICES.md](./THIRD-PARTY-NOTICES.md)).
+- `android/`, `ios/` — the native Kotlin/Swift bridge.
+- `example/` — a runnable Expo app used as the manual test bed.
+
+When adding a bridge message, keep the three sides in sync: `BridgingNames` (types.ts), the WebView handler (utils.ts), and the RN handler (SelectableTextView.tsx).
+
+## Checks
+
+Everything must pass before a PR is merged:
+
+```sh
+yarn lint           # eslint + prettier (expo-module lint)
+yarn format         # auto-fix formatting (prettier --write .)
+npx tsc --noEmit    # type-check
+yarn test           # test suite (expo-module test)
+```
+
+A pre-commit hook (Husky + lint-staged) runs Prettier and ESLint on staged files automatically.
+
+## Commit messages
+
+We use [Conventional Commits](https://www.conventionalcommits.org/), enforced by commitlint on a `commit-msg` hook. Format:
+
+```
+<type>: <subject>
+```
+
+Allowed **types**: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `chore`, `build`, `ci`, `bump`.
+
+Subject rules: keep it short and do **not** start it with a capital / Title Case (identifiers like `onHighlightPressed` mid-sentence are fine).
+
+Examples:
+
+```
+feat: add onHighlightsVisibilityStateChange callback
+fix: avoid duplicate onTextSelectionChange events
+docs: document the highlighters animation option
+```
+
+## Pull requests
+
+1. Fork and branch off `main` (e.g. `feat/my-change`).
+2. Make your change and keep the public API documented (JSDoc in `types.ts`, plus the README table). Add usage to `example/` when it helps.
+3. Run the checks above; make sure the example still builds/runs for a native change.
+4. Update [`CHANGELOG.md`](./CHANGELOG.md) under an "Unreleased" section.
+5. Open the PR with a clear description of the change and how you tested it.
+
+## Reporting issues
+
+Open a GitHub issue with: what you expected, what happened, a minimal repro, and your environment (OS, Expo SDK, React Native, and this package's version).
