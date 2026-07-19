@@ -18,7 +18,7 @@ import type {
   GoogleFontFamily,
 } from "./types";
 
-function escapeHtmlAttribute(value: string): string {
+export function escapeHtmlAttribute(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/"/g, "&quot;")
@@ -91,7 +91,7 @@ export function fontsToCSS(fonts: SelectableTextViewFonts | undefined): string {
     .join("\n");
 }
 
-function buildGoogleFontFamilyParam(options: GoogleFontFamily): string {
+export function buildGoogleFontFamilyParam(options: GoogleFontFamily): string {
   const family = options.family.trim().replace(/\s+/g, "+");
   const weights = options.weights ?? "400";
   const isRange = weights.includes("..");
@@ -207,7 +207,7 @@ export function generatePromiseId(): string {
   return id;
 }
 
-function uniqueByName(list: Highlighter[]): Highlighter[] {
+export function uniqueByName(list: Highlighter[]): Highlighter[] {
   const map = new Map<string, Highlighter>();
   for (const item of list) {
     map.set(item.name, item);
@@ -215,7 +215,7 @@ function uniqueByName(list: Highlighter[]): Highlighter[] {
   return Array.from(map.values());
 }
 
-function toCssLength(
+export function toCssLength(
   value: number | string | undefined,
   fallback: string
 ): string {
@@ -225,14 +225,14 @@ function toCssLength(
   return typeof value === "number" ? `${value}px` : value;
 }
 
-function animationToCSS(animation?: AnimationOptions): string {
+export function animationToCSS(animation?: AnimationOptions): string {
   if (!animation) {
     return "";
   }
   return `animation: ${animation.name} ${animation.duration} ${animation.timingFunction} ${animation.iterationCount};`;
 }
 
-function highlightersToCSS(list: Highlighter[]): string {
+export function highlightersToCSS(list: Highlighter[]): string {
   return list
     .map(({ name, options }) => {
       const declarations: string[] = [];

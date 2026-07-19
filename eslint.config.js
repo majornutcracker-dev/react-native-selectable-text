@@ -29,6 +29,14 @@ export default [
     },
   },
   {
+    files: ["**/__tests__/**", "**/*.{test,spec}.{ts,tsx,js,jsx}"],
+    languageOptions: {
+      globals: {
+        ...globals.jest,
+      },
+    },
+  },
+  {
     ignores: ["dist/", "node_modules/", "ios/", "android/", ".expo/"],
   },
 ];
