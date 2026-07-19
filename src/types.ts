@@ -54,12 +54,7 @@ export type AnimationOptions = {
   name: string;
   duration: string;
   timingFunction:
-    | "linear"
-    | "ease"
-    | "ease-in"
-    | "ease-out"
-    | "ease-in-out"
-    | string;
+    "linear" | "ease" | "ease-in" | "ease-out" | "ease-in-out" | string;
   iterationCount: number | "infinite";
 };
 

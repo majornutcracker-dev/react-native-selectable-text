@@ -1,19 +1,18 @@
 import * as React from "react";
-import { WebView, WebViewProps } from "react-native-webview";
-
+import { WebView, type WebViewProps } from "react-native-webview";
 import {
   BridgingNames,
-  Message,
-  SelectableTextViewPropsBase,
-  SelectableTextViewRef,
-  Highlights,
-  SelectableTextViewError,
-  HighlightData,
-  HighlighterName,
+  type Message,
+  type SelectableTextViewPropsBase,
+  type SelectableTextViewRef,
+  type Highlights,
+  type SelectableTextViewError,
+  type HighlightData,
+  type HighlighterName,
 } from "./types";
 import { generatePromiseId, htmlContent } from "./utils";
 import { Linking, Platform } from "react-native";
-import { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
+import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
 
 export type SelectableTextViewProps = SelectableTextViewPropsBase & {
   webViewProps?: WebViewProps;

@@ -7,11 +7,6 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "example",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.majornutcracker.reactnativeselectablewebview.example"
@@ -26,7 +21,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.majornutcracker.reactnativeselectablewebview.example"
     },
-    "plugins": ["expo-router"],
+    "plugins": ["expo-router", "expo-image"],
     "experiments": {
       "typedRoutes": true
     }

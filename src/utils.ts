@@ -6,7 +6,7 @@ import {
   serializer,
   textRange,
 } from "./rangy@1.3.2";
-import {
+import type {
   Highlighter,
   AnimationOptions,
   CSSString,

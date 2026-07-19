@@ -17,7 +17,7 @@ This is an Expo module. In bare React Native projects, make sure you have [insta
 - `expo`
 - `react`
 - `react-native`
-- `react-native-webview` `>=13.16.0`
+- `react-native-webview` `^13.16.1` (`>=13.16.1 <14`; v14 ships incompatible types)
 
 ## Quick start
 
@@ -159,12 +159,7 @@ type AnimationOptions = {
   keyframesCss: string; // the @keyframes rule, injected as-is
   duration: string; // e.g. "2s"
   timingFunction:
-    | "linear"
-    | "ease"
-    | "ease-in"
-    | "ease-out"
-    | "ease-in-out"
-    | string;
+    "linear" | "ease" | "ease-in" | "ease-out" | "ease-in-out" | string;
   iterationCount: number | "infinite";
 };
 ```

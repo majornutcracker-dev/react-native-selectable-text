@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   handleImage: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   handleBar: {
     width: 56,
