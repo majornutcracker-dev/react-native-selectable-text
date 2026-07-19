@@ -51,11 +51,29 @@ Everything must pass before a PR is merged:
 ```sh
 yarn lint           # eslint + prettier (expo-module lint)
 yarn format         # auto-fix formatting (prettier --write .)
-npx tsc --noEmit    # type-check
-yarn test           # test suite (expo-module test)
+yarn typecheck      # tsc --noEmit
+yarn test           # jest test suite
 ```
 
 A pre-commit hook (Husky + lint-staged) runs Prettier and ESLint on staged files automatically.
+
+### Tests
+
+Tests live in `src/__tests__/` and run with Jest (configured in `jest.config.cjs` as two projects):
+
+- **`*.test.ts`** — pure unit tests in a Node environment (e.g. the `utils.ts` string/CSS/font helpers).
+- **`*.test.tsx`** — component/bridge tests in the `jest-expo` environment; `react-native-webview` is mocked so the RN ↔ WebView message flow can be asserted.
+
+The WebView runtime itself (the injected JS string in `utils.ts`) is not unit-tested here — verify those changes by running the example app.
+
+## Continuous integration
+
+GitHub Actions (`.github/workflows/ci.yml`) runs on every push and pull request to `main`:
+
+1. `checks` — `yarn lint`, `yarn test`, `yarn typecheck`.
+2. `android` / `ios` — prebuild and compile the example app (Gradle and CocoaPods caches speed up re-runs).
+
+Native builds only run after `checks` passes. Keep CI green before requesting a review.
 
 ## Commit messages
 
