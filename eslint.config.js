@@ -1,15 +1,16 @@
 import js from "@eslint/js";
-import typescriptEslint from "@typescript-eslint/eslint-plugin";
-import typescriptParser from "@typescript-eslint/parser";
 import prettier from "eslint-plugin-prettier";
 import globals from "globals";
+// `typescript-eslint` re-exports the plugin and the parser, so they don't need
+// to be declared (and kept in sync) as separate dependencies.
+import tseslint from "typescript-eslint";
 
 export default [
   js.configs.recommended,
   {
     files: ["**/*.{ts,tsx,js,jsx}"],
     languageOptions: {
-      parser: typescriptParser,
+      parser: tseslint.parser,
       globals: {
         ...globals.node,
         ...globals.browser,
@@ -17,13 +18,16 @@ export default [
       },
     },
     plugins: {
-      "@typescript-eslint": typescriptEslint,
+      "@typescript-eslint": tseslint.plugin,
       prettier: prettier,
     },
     rules: {
       "prettier/prettier": ["error", { singleQuote: false }],
+      // The base rule doesn't understand type-only positions (it flags the
+      // parameter names in callback type declarations), so TS files rely on
+      // the typescript-eslint version instead.
+      "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": "warn",
-      "no-unused-vars": "warn",
       "no-undef": "error",
       "no-console": "off",
     },
@@ -37,6 +41,16 @@ export default [
     },
   },
   {
-    ignores: ["dist/", "node_modules/", "ios/", "android/", ".expo/"],
+    ignores: [
+      "build/", // tsc output (see tsconfig.json `outDir`)
+      "dist/",
+      "coverage/",
+      "node_modules/",
+      "ios/",
+      "android/",
+      ".expo/",
+      "example/.expo/",
+      "src/rangy@1.3.2/", // vendored third-party, not ours to lint
+    ],
   },
 ];

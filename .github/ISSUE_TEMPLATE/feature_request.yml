@@ -1,0 +1,35 @@
+name: Feature request
+description: Suggest a new prop, ref method, callback, or highlighter option.
+labels: ["enhancement", "needs triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: >
+        Describe the use case rather than the implementation. What are you
+        trying to build that the current API makes hard?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed API
+      description: How would it look at the call site?
+      render: tsx
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you tried, and why they fall short.
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: This would require a change to the RN ↔ WebView bridge contract.
+        - label: This would be a breaking change to the public API.
+        - label: I would be willing to open a PR for this.

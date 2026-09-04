@@ -1,0 +1,21 @@
+# Normalize line endings on checkin; check out native to the platform.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.jks binary
+*.keystore binary
+
+# Vendored Rangy (© Tim Down, MIT) — see docs/THIRD-PARTY-NOTICES.md.
+# Keep it out of language stats and collapsed in diffs; it is not our code.
+src/rangy@1.3.2/** linguist-vendored
+
+# The example app is a test bed, not the published library.
+example/** linguist-documentation
+
+# Lockfiles are generated: collapse them in PR diffs.
+yarn.lock -diff linguist-generated
+example/yarn.lock -diff linguist-generated

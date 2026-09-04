@@ -1,11 +1,25 @@
 {
   "name": "@majornutcracker/react-native-selectable-text",
   "version": "1.0.0",
-  "description": "A MajorNutcracker Expo module for react-native-webview that enables advanced text selection, custom menus, and persistent highlighting via Rangy. Native iOS and Android bridge (Swift/Kotlin) to serialize, sync, and restore HTML content selections.",
+  "description": "A Majornutcracker Expo module for react-native-webview that enables advanced text selection, custom menus, and persistent highlighting via Rangy. Native iOS and Android bridge (Swift/Kotlin) to serialize, sync, and restore HTML content selections.",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "type": "module",
   "packageManager": "yarn@1.22.22",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "build",
+    "src",
+    "!src/__tests__",
+    "android/build.gradle",
+    "android/src/main",
+    "ios/*.podspec",
+    "ios/*.swift",
+    "expo-module.config.json",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "build": "expo-module build",
     "clean": "expo-module clean",
@@ -24,7 +38,7 @@
     "react-native",
     "expo",
     "@majornutcracker/react-native-selectable-text",
-    "MajorNutcracker",
+    "Majornutcracker",
     "selectable text",
     "text selection",
     "rangy",
@@ -45,9 +59,9 @@
   "bugs": {
     "url": "https://github.com/majornutcracker-dev/react-native-selectable-text/issues"
   },
-  "author": "MajorNutcracker <joshiparsa@gmail.com> (JoshuaPariona)",
+  "author": "Majornutcracker <joshiparsa@gmail.com> (JoshuaPariona)",
   "license": "MIT",
-  "homepage": "https://docs.majornutcracker.com/react-native-selectable-text/1.0.0",
+  "homepage": "https://docs.majornutcracker.com/react-native-selectable-text",
   "devDependencies": {
     "@commitlint/cli": "^21.2.0",
     "@commitlint/config-conventional": "^21.2.0",

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or usage help
+    url: https://github.com/majornutcracker-dev/react-native-selectable-text/discussions
+    about: Ask how to use the module, or discuss an idea before filing a request.
+  - name: Documentation
+    url: https://docs.majornutcracker.com/react-native-selectable-text
+    about: Full API reference and guides.
+  - name: Report a security vulnerability
+    url: https://github.com/majornutcracker-dev/react-native-selectable-text/security/advisories/new
+    about: Please report vulnerabilities privately, never as a public issue.

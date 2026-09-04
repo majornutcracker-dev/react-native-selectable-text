@@ -2,7 +2,9 @@
 
 Thanks for your interest in improving **@majornutcracker/react-native-selectable-text**! This guide covers how to set up the project, the workflow, and the conventions we follow.
 
-By contributing, you agree that your contributions are licensed under the project's [MIT License](./LICENSE).
+By contributing, you agree that your contributions are licensed under the project's [MIT License](./LICENSE), and that you will follow our [Code of Conduct](./CODE_OF_CONDUCT.md).
+
+Found a security issue? Do **not** open a public issue — see [SECURITY.md](./SECURITY.md).
 
 ## Prerequisites
 
@@ -111,4 +113,8 @@ patch / minor / major bump.
 
 ## Reporting issues
 
-Open a GitHub issue with: what you expected, what happened, a minimal repro, and your environment (OS, Expo SDK, React Native, and this package's version).
+Open a GitHub issue using the **Bug report** or **Feature request** template — they prompt for
+everything we need (what you expected, what happened, a minimal repro, and your environment:
+OS, Expo SDK, React Native, and this package's version).
+
+For anything security-related, use [SECURITY.md](./SECURITY.md) instead of a public issue.

@@ -10,6 +10,10 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege: CI only ever needs to read the checkout.
+permissions:
+  contents: read
+
 jobs:
   checks:
     name: Lint · test · typecheck
