@@ -27,6 +27,64 @@ export function escapeHtmlAttribute(value: string): string {
     .replace(/>/g, "&gt;");
 }
 
+// U+2028/U+2029 are valid inside a JSON string but were line terminators in
+// JS before ES2019. The pattern is built at runtime because neither form
+// survives well in a regex literal: the raw character IS a line terminator,
+// which makes the literal a syntax error.
+const JS_LINE_SEPARATORS = new RegExp(
+  String.fromCharCode(0x2028) + "|" + String.fromCharCode(0x2029),
+  "g"
+);
+
+/**
+ * Serializes a value for interpolation into the injected `<script>` block.
+ *
+ * `JSON.stringify` on its own is not enough: the HTML parser scans for the
+ * literal `</script` before the JS parser ever runs, so an unescaped `<` in
+ * the data closes the script element early and takes the whole bridge down
+ * with it.
+ */
+export function toScriptLiteral(value: unknown): string {
+  // `?? null` because JSON.stringify(undefined) returns undefined, not a string.
+  return JSON.stringify(value ?? null)
+    .replace(/</g, "\\u003C")
+    .replace(/>/g, "\\u003E")
+    .replace(JS_LINE_SEPARATORS, (char) =>
+      char === String.fromCharCode(0x2028) ? "\\u2028" : "\\u2029"
+    );
+}
+
+/**
+ * Escapes a value for use inside a double-quoted CSS string, e.g. `url("…")`.
+ *
+ * HTML-entity escaping is wrong in this position: `<style>` is a raw-text
+ * element, so its content is never entity-decoded and an `&amp;` would be sent
+ * to the network as those five literal characters. What actually needs escaping
+ * is the backslash and the quote; newlines are invalid inside a CSS string, and
+ * `<` is neutralized so a value can never close the style element.
+ */
+export function escapeCssString(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/[\r\n]/g, "")
+    .replace(/</g, "\\00003c");
+}
+
+const CSS_CLASS_NAME = /^-?[_a-zA-Z][_a-zA-Z0-9-]*$/;
+
+/**
+ * A highlighter name becomes both a CSS class (`.name { … }`) and a selector
+ * handed to `querySelectorAll`/`closest` inside the WebView. An invalid
+ * identifier — a leading digit, a space, a quote — either throws a DOMException
+ * from a bare event listener or silently degrades into a selector that matches
+ * nothing, so names are validated once, up front, instead of failing at
+ * whichever call site happens to run first.
+ */
+export function isValidHighlighterName(name: string): boolean {
+  return CSS_CLASS_NAME.test(name);
+}
+
 export function fontsToHeadMarkup(
   fonts: SelectableTextViewFonts | undefined
 ): string {
@@ -63,10 +121,10 @@ export function fontsToCSS(fonts: SelectableTextViewFonts | undefined): string {
   return fonts.faces
     .map((face) => {
       const sources = (Array.isArray(face.src) ? face.src : [face.src])
-        .map((source) => `url("${escapeHtmlAttribute(source)}")`)
+        .map((source) => `url("${escapeCssString(source)}")`)
         .join(", ");
       const rules = [
-        `font-family: "${face.fontFamily.replace(/"/g, '\\"')}";`,
+        `font-family: "${escapeCssString(face.fontFamily)}";`,
         `src: ${sources};`,
       ];
 
@@ -344,10 +402,24 @@ export const htmlContent = ({
           },
         },
       ];
-  const applierNames = JSON.stringify(uniqueHL.map((c) => c.name));
+  // A name that is not a valid CSS class would be interpolated straight into a
+  // stylesheet and into `closest()`/`querySelectorAll()` selectors inside the
+  // WebView, where it either throws or silently matches nothing. Drop it here,
+  // loudly, rather than letting it fail later with an unrelated-looking error.
+  const validHL = uniqueHL.filter((highlighter) => {
+    if (isValidHighlighterName(highlighter.name)) {
+      return true;
+    }
+    console.warn(
+      `[@majornutcracker/react-native-selectable-text] Ignoring highlighter "${highlighter.name}": ` +
+        `a highlighter name must be a valid CSS class name (letters, digits, "-" and "_", not starting with a digit).`
+    );
+    return false;
+  });
+  const applierNames = toScriptLiteral(validHL.map((c) => c.name));
   const content = c ?? "";
   const style = css ?? "";
-  const cssClasses = highlightersToCSS(uniqueHL);
+  const cssClasses = highlightersToCSS(validHL);
   const fontsHeadMarkup = fontsToHeadMarkup(f);
   const fontsCSS = fontsToCSS(f);
 
@@ -615,13 +687,18 @@ export const htmlContent = ({
 
       // @sdk-internal-with-event
       function updateHighlights(highlights) {
-        if (!highlights) {
+        // \`highlights\` is a state prop: null/undefined means "leave as is",
+        // while an empty string means "clear everything". Treating "" as a
+        // no-op would make the prop impossible to reset.
+        if (highlights == null) {
           return;
         }
         try {
           clearHighlightFocusStyle();
           __MNST__.highlighter.removeAllHighlights();
-          __MNST__.highlighter.deserialize(highlights);
+          if (highlights) {
+            __MNST__.highlighter.deserialize(highlights);
+          }
           clearIgnoredElementsBackgroundColors();
           applyHighlightVisibilityClass(false, true);
           sendOnHighlightChange(__MNST__.highlighter.serialize());
@@ -885,18 +962,19 @@ export const htmlContent = ({
 
       // <------------------- Internal utils functions ------------------------>
 
-      function applyHighlightVisibilityClass(throwError = false, inverse = false) {
+      function applyHighlightVisibilityClass(isToggle = false, inverse = false) {
         const visible = __MNST__.state.visible;
         const highlightNames = ${applierNames};
         const selector = highlightNames.map((c) => "."+c).join(", ");
-        const nodes = [...document.querySelectorAll(selector)];
+        // querySelectorAll("") throws, and the list can be empty if every
+        // configured highlighter name was rejected as an invalid CSS class.
+        const nodes = selector ? [...document.querySelectorAll(selector)] : [];
         if (nodes.length === 0) {
-          if (throwError) {
-            throw new Error("No highlights found");
-          } else {
-            return visible;
-          }
-        } 
+          // Nothing rendered to show or hide. An explicit toggle still flips the
+          // state so the consumer's control stays in sync with what the next
+          // highlight will do; a passive sync leaves the state untouched.
+          return isToggle ? !visible : visible;
+        }
         const condition = inverse ? !visible: visible;
         if (condition) {
           nodes.forEach((node) => {
@@ -946,7 +1024,7 @@ export const htmlContent = ({
       }
       
       function clearIgnoredElementsBackgroundColors() {
-        const ignoredSelector = "${ignoredElementsString}".trim();
+        const ignoredSelector = ${toScriptLiteral(ignoredElementsString)}.trim();
         if (!ignoredSelector) {
           return [];
         }
@@ -1013,7 +1091,9 @@ export const htmlContent = ({
           );
         }
 
-        updateHighlights(${JSON.stringify(highlights ?? "")});
+        // null (not "") so that mounting without highlights stays a no-op —
+        // an empty string means "clear", which would emit a spurious change event.
+        updateHighlights(${toScriptLiteral(highlights ?? null)});
 
         if (__MNST__.platform.isAndroid) {
           document.addEventListener("message", function (event) {

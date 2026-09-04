@@ -1,5 +1,8 @@
 import {
   escapeHtmlAttribute,
+  toScriptLiteral,
+  escapeCssString,
+  isValidHighlighterName,
   toCssLength,
   animationToCSS,
   uniqueByName,
@@ -310,5 +313,141 @@ describe("htmlContent", () => {
   });
   it("uses the default ignored elements", () => {
     expect(html).toContain("a, sup, sub");
+  });
+});
+
+describe("toScriptLiteral", () => {
+  it("neutralizes a </script> terminator in the data", () => {
+    const out = toScriptLiteral("a</script>b");
+    expect(out).not.toContain("</script");
+    expect(out).toContain("\\u003C");
+  });
+
+  it("escapes U+2028/U+2029, which were JS line terminators before ES2019", () => {
+    expect(toScriptLiteral("a" + String.fromCharCode(0x2028) + "b")).toContain(
+      "\\u2028"
+    );
+    expect(toScriptLiteral("a" + String.fromCharCode(0x2029) + "b")).toContain(
+      "\\u2029"
+    );
+  });
+
+  it("round-trips: the emitted literal evaluates back to the input", () => {
+    const inputs = [
+      'a[href^="http"]',
+      "a</script>b",
+      "line" + String.fromCharCode(0x2028) + "sep",
+      "back\\slash",
+      "",
+    ];
+    for (const input of inputs) {
+      expect(eval(toScriptLiteral(input))).toBe(input);
+    }
+  });
+
+  it('emits null for undefined instead of the string "undefined"', () => {
+    expect(toScriptLiteral(undefined)).toBe("null");
+
+    expect(eval(toScriptLiteral(undefined))).toBeNull();
+  });
+});
+
+describe("escapeCssString", () => {
+  it("leaves & alone, since <style> is never entity-decoded", () => {
+    expect(escapeCssString("f.woff2?a=1&b=2")).toBe("f.woff2?a=1&b=2");
+  });
+
+  it("escapes the quote and the backslash that would close the CSS string", () => {
+    expect(escapeCssString('a"b')).toBe('a\\"b');
+    expect(escapeCssString("a\\b")).toBe("a\\\\b");
+  });
+
+  it("neutralizes < so a value cannot close the style element", () => {
+    expect(escapeCssString("a</style>b")).not.toContain("<");
+  });
+
+  it("drops newlines, which are invalid inside a CSS string", () => {
+    expect(escapeCssString("a\nb")).toBe("ab");
+  });
+});
+
+describe("isValidHighlighterName", () => {
+  it.each(["yellow-highlighter", "yh", "_x", "-x", "a1"])(
+    "accepts %s",
+    (name) => {
+      expect(isValidHighlighterName(name)).toBe(true);
+    }
+  );
+
+  it.each(["1st-pass", "two words", 'q"uote', "", "a.b", "a>b"])(
+    "rejects %s",
+    (name) => {
+      expect(isValidHighlighterName(name)).toBe(false);
+    }
+  );
+});
+
+describe("htmlContent hardening against hostile input", () => {
+  const html = htmlContent({
+    hl: [
+      { name: "1st-pass", options: { type: "background-color", color: "red" } },
+      { name: "ok-name", options: { type: "background-color", color: "blue" } },
+    ],
+    h: "a</script><script>alert(1)</script>",
+    c: "<p>hi</p>",
+    css: undefined,
+    f: {
+      faces: [{ fontFamily: 'Ev"il', src: "https://x.com/f.woff2?a=1&b=2" }],
+    },
+    ho: { ignoredElements: ['a[href^="http"]', "sup"] },
+    p: "ios",
+    o: undefined,
+  });
+
+  // The page carries several script blocks (the vendored Rangy bundles among
+  // them); the SDK bootstrap is the last one.
+  function scriptBlocks() {
+    return html
+      .split("<script>")
+      .slice(1)
+      .map((block) => block.slice(0, block.indexOf("</script>")));
+  }
+
+  function injectedScript() {
+    const blocks = scriptBlocks();
+    if (!blocks.length) throw new Error("injected script not found");
+    return blocks[blocks.length - 1];
+  }
+
+  it("emits a syntactically valid script despite quotes in ignoredElements", () => {
+    // A selector like a[href^="http"] used to break out of its string literal
+    // and take the whole bridge down with a SyntaxError.
+    expect(() => new Function(injectedScript())).not.toThrow();
+  });
+
+  it("keeps the consumer's selector intact inside the script", () => {
+    expect(injectedScript()).toContain("http");
+  });
+
+  it("does not let a </script> in the highlights close the script element", () => {
+    // Only "</script" ends script data, so that is the sequence the payload
+    // must never reintroduce; a bare "<script>" inside script content (the
+    // vendored Rangy has one in a comment) is inert.
+    expect(injectedScript()).not.toContain("</script");
+    expect(injectedScript()).toContain("alert(1)"); // still present, but inert
+  });
+
+  it("drops a highlighter name that is not a valid CSS class", () => {
+    expect(html).not.toContain("1st-pass");
+    expect(html).toContain("ok-name");
+  });
+
+  it("does not HTML-escape font URLs, which <style> would never decode", () => {
+    expect(html).toContain("f.woff2?a=1&b=2");
+    expect(html).not.toContain("f.woff2?a=1&amp;b=2");
+  });
+
+  it("escapes a quote in font-family for CSS, not for HTML", () => {
+    expect(html).not.toContain("Ev&quot;il");
   });
 });

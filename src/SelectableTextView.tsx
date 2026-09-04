@@ -50,6 +50,13 @@ const SelectableTextView = React.forwardRef<
 
   const webviewRef = React.useRef<WebView>(null);
 
+  // Anything posted before the WebView document is ready is dropped on the
+  // floor. Queue instead: a `highlights` change during the initial load would
+  // otherwise be lost for good, and early imperative calls would reject with a
+  // misleading "Timeout".
+  const isWebViewReady = React.useRef(false);
+  const pendingMessages = React.useRef<Message[]>([]);
+
   const finalSource = React.useRef({
     html: htmlContent({
       hl: highlighters,
@@ -66,108 +73,132 @@ const SelectableTextView = React.forwardRef<
   const handleMessage = React.useCallback(
     async (event: any) => {
       webViewProps?.onMessage?.(event);
-      const data = JSON.parse(event.nativeEvent.data) as Message;
-      if (data.type === BridgingNames.events.onHighlightsChange) {
-        onHighlightsChange?.(data.value as string);
-      } else if (data.type === BridgingNames.events.onTextSelectionChange) {
-        onTextSelectionChange?.(data.value as string);
-      } else if (data.type === BridgingNames.promises.getSelectedText) {
-        const success = data.value.success;
-        const id = data.value.promiseId;
-        const text = data.value.text;
-        const error = data.value.error;
-        if (success) {
-          promises.current[id]?.resolve(text ?? "");
-        } else {
-          promises.current[id]?.reject(
-            new Error(error ?? "Unknown error while getting selected text")
+
+      // Any script in the rendered content can call postMessage, so the payload
+      // is not guaranteed to be ours or to be JSON. Without this guard the throw
+      // escapes an async handler as an unhandled promise rejection.
+      let data: Message;
+      try {
+        data = JSON.parse(event.nativeEvent.data) as Message;
+      } catch {
+        return;
+      }
+      if (data?.type == null) {
+        return;
+      }
+
+      try {
+        if (data.type === BridgingNames.events.onHighlightsChange) {
+          onHighlightsChange?.(data.value as string);
+        } else if (data.type === BridgingNames.events.onTextSelectionChange) {
+          onTextSelectionChange?.(data.value as string);
+        } else if (data.type === BridgingNames.promises.getSelectedText) {
+          const success = data.value.success;
+          const id = data.value.promiseId;
+          const text = data.value.text;
+          const error = data.value.error;
+          if (success) {
+            promises.current[id]?.resolve(text ?? "");
+          } else {
+            promises.current[id]?.reject(
+              new Error(error ?? "Unknown error while getting selected text")
+            );
+          }
+          delete promises.current[id];
+        } else if (data.type === BridgingNames.promises.getHighlights) {
+          const success = data.value.success;
+          const id = data.value.promiseId;
+          const highlights = data.value.highlights;
+          const error = data.value.error;
+          if (success) {
+            promises.current[id]?.resolve(highlights ?? "");
+          } else {
+            promises.current[id]?.reject(
+              new Error(error ?? "Unknown error while getting highlights")
+            );
+          }
+          delete promises.current[id];
+        } else if (data.type === BridgingNames.promises.getAllHighlightsData) {
+          const success = data.value.success;
+          const id = data.value.promiseId;
+          const highlightsData = data.value.highlightsData;
+          const error = data.value.error;
+          if (success) {
+            promises.current[id]?.resolve(highlightsData ?? []);
+          } else {
+            promises.current[id]?.reject(
+              new Error(
+                error ?? "Unknown error while getting all highlights data"
+              )
+            );
+          }
+          delete promises.current[id];
+        } else if (data.type === BridgingNames.events.log) {
+          console.log("Log: ", data.value);
+        } else if (data.type === BridgingNames.events.onError) {
+          onError?.(data.value as SelectableTextViewError);
+        } else if (data.type === BridgingNames.events.onHighlightPressed) {
+          const className = await onHighlightPressed?.(
+            data.value as HighlightData
           );
+          if (className) {
+            _postMessage({
+              type: BridgingNames.functions.focusHighlight,
+              value: {
+                id: data.value.id,
+                className,
+                scroll: false,
+              },
+            });
+          }
+        } else if (
+          data.type === BridgingNames.promises.getHighlightsVisibilityState
+        ) {
+          const success = data.value.success;
+          const id = data.value.promiseId;
+          const visible = data.value.visible;
+          const error = data.value.error;
+          if (success) {
+            promises.current[id]?.resolve(visible ?? false);
+          } else {
+            promises.current[id]?.reject(
+              new Error(
+                error ??
+                  "Unknown error while getting highlights visibility state"
+              )
+            );
+          }
+          delete promises.current[id];
+        } else if (
+          data.type === BridgingNames.promises.toggleHighlightsVisibility
+        ) {
+          const success = data.value.success;
+          const id = data.value.promiseId;
+          const visible = data.value.visible;
+          const error = data.value.error;
+          if (success) {
+            promises.current[id]?.resolve(visible ?? false);
+          } else {
+            promises.current[id]?.reject(
+              new Error(
+                error ?? "Unknown error while toggling highlights visibility"
+              )
+            );
+          }
+          delete promises.current[id];
+        } else if (
+          data.type === BridgingNames.events.onHighlightsVisibilityStateChange
+        ) {
+          onHighlightsVisibilityStateChange?.(data.value as boolean);
         }
-        delete promises.current[id];
-      } else if (data.type === BridgingNames.promises.getHighlights) {
-        const success = data.value.success;
-        const id = data.value.promiseId;
-        const highlights = data.value.highlights;
-        const error = data.value.error;
-        if (success) {
-          promises.current[id]?.resolve(highlights ?? "");
-        } else {
-          promises.current[id]?.reject(
-            new Error(error ?? "Unknown error while getting highlights")
-          );
-        }
-        delete promises.current[id];
-      } else if (data.type === BridgingNames.promises.getAllHighlightsData) {
-        const success = data.value.success;
-        const id = data.value.promiseId;
-        const highlightsData = data.value.highlightsData;
-        const error = data.value.error;
-        if (success) {
-          promises.current[id]?.resolve(highlightsData ?? []);
-        } else {
-          promises.current[id]?.reject(
-            new Error(
-              error ?? "Unknown error while getting all highlights data"
-            )
-          );
-        }
-        delete promises.current[id];
-      } else if (data.type === BridgingNames.events.log) {
-        console.log("Log: ", data.value);
-      } else if (data.type === BridgingNames.events.onError) {
-        onError?.(data.value as SelectableTextViewError);
-      } else if (data.type === BridgingNames.events.onHighlightPressed) {
-        const className = await onHighlightPressed?.(
-          data.value as HighlightData
+      } catch (error) {
+        // A consumer callback threw or rejected. This handler is async, so
+        // letting it escape would surface as an unhandled promise rejection
+        // detached from the callback that actually caused it.
+        console.error(
+          "[@majornutcracker/react-native-selectable-text] Error handling bridge message:",
+          error
         );
-        if (className) {
-          _postMessage({
-            type: BridgingNames.functions.focusHighlight,
-            value: {
-              id: data.value.id,
-              className,
-              scroll: false,
-            },
-          });
-        }
-      } else if (
-        data.type === BridgingNames.promises.getHighlightsVisibilityState
-      ) {
-        const success = data.value.success;
-        const id = data.value.promiseId;
-        const visible = data.value.visible;
-        const error = data.value.error;
-        if (success) {
-          promises.current[id]?.resolve(visible ?? false);
-        } else {
-          promises.current[id]?.reject(
-            new Error(
-              error ?? "Unknown error while getting highlights visibility state"
-            )
-          );
-        }
-        delete promises.current[id];
-      } else if (
-        data.type === BridgingNames.promises.toggleHighlightsVisibility
-      ) {
-        const success = data.value.success;
-        const id = data.value.promiseId;
-        const visible = data.value.visible;
-        const error = data.value.error;
-        if (success) {
-          promises.current[id]?.resolve(visible ?? false);
-        } else {
-          promises.current[id]?.reject(
-            new Error(
-              error ?? "Unknown error while toggling highlights visibility"
-            )
-          );
-        }
-        delete promises.current[id];
-      } else if (
-        data.type === BridgingNames.events.onHighlightsVisibilityStateChange
-      ) {
-        onHighlightsVisibilityStateChange?.(data.value as boolean);
       }
     },
     [
@@ -200,7 +231,14 @@ const SelectableTextView = React.forwardRef<
     [onLink]
   );
 
+  const isFirstHighlightsEffect = React.useRef(true);
   React.useEffect(() => {
+    // The initial value is already baked into the generated HTML; re-posting it
+    // would replay the highlights and emit a redundant change event.
+    if (isFirstHighlightsEffect.current) {
+      isFirstHighlightsEffect.current = false;
+      return;
+    }
     _postMessage({
       type: BridgingNames.functions.updateHighlights,
       value: highlights,
@@ -373,8 +411,25 @@ const SelectableTextView = React.forwardRef<
   };
 
   const _postMessage = (message: Message) => {
+    if (!isWebViewReady.current) {
+      pendingMessages.current.push(message);
+      return;
+    }
     webviewRef.current?.postMessage(JSON.stringify(message));
   };
+
+  const handleLoadEnd = React.useCallback(
+    (event: any) => {
+      isWebViewReady.current = true;
+      const queued = pendingMessages.current;
+      pendingMessages.current = [];
+      queued.forEach((message) => {
+        webviewRef.current?.postMessage(JSON.stringify(message));
+      });
+      webViewProps?.onLoadEnd?.(event);
+    },
+    [webViewProps?.onLoadEnd]
+  );
 
   React.useImperativeHandle(ref, () => ({
     highlightSelection,
@@ -398,6 +453,7 @@ const SelectableTextView = React.forwardRef<
       source={finalSource.current}
       javaScriptEnabled
       onMessage={handleMessage}
+      onLoadEnd={handleLoadEnd}
       onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
     />
   );

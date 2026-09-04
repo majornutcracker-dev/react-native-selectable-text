@@ -29,7 +29,17 @@ jest.mock("react-native-webview", () => {
 function renderComponent(props: Partial<SelectableTextViewProps> = {}) {
   const ref = React.createRef<SelectableTextViewRef>();
   render(<SelectableTextView ref={ref} content="<p>hi</p>" {...props} />);
+  // The component queues messages until the WebView document is ready. A real
+  // WebView always fires this, so tests start from a loaded view unless they
+  // are specifically exercising the queue.
+  fireLoadEnd();
   return ref;
+}
+
+function fireLoadEnd() {
+  act(() => {
+    mockWebview.props.onLoadEnd?.({ nativeEvent: {} });
+  });
 }
 
 async function fireMessage(type: string, value: unknown) {
@@ -215,5 +225,118 @@ describe("promise round-trips", () => {
       error: "boom",
     });
     await assertion;
+  });
+});
+
+describe("WebView readiness", () => {
+  it("queues messages posted before load and flushes them once loaded", () => {
+    const ref = React.createRef<SelectableTextViewRef>();
+    render(<SelectableTextView ref={ref} content="<p>hi</p>" />);
+
+    act(() => {
+      ref.current!.highlightSelection("yellow-highlighter");
+    });
+    // Posting now would be dropped by the WebView, so nothing is sent yet.
+    expect(mockPostMessage).not.toHaveBeenCalled();
+
+    fireLoadEnd();
+
+    expect(lastPosted()).toEqual({
+      type: BridgingNames.functions.highlightSelection,
+      value: "yellow-highlighter",
+    });
+  });
+
+  it("flushes the queue in order", () => {
+    const ref = React.createRef<SelectableTextViewRef>();
+    render(<SelectableTextView ref={ref} content="<p>hi</p>" />);
+
+    act(() => {
+      ref.current!.unhighlightSelection();
+      ref.current!.clearHighlights();
+    });
+    fireLoadEnd();
+
+    const types = mockPostMessage.mock.calls.map(
+      (call) => JSON.parse(call[0]).type
+    );
+    expect(types).toEqual([
+      BridgingNames.functions.unhighlightSelection,
+      BridgingNames.functions.clearHighlights,
+    ]);
+  });
+
+  it("forwards the consumer's webViewProps.onLoadEnd", () => {
+    const onLoadEnd = jest.fn();
+    renderComponent({ webViewProps: { onLoadEnd } });
+    expect(onLoadEnd).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("highlights state prop", () => {
+  it("does not re-post the initial value, which the HTML already carries", () => {
+    renderComponent({ highlights: "serialized" });
+    expect(mockPostMessage).not.toHaveBeenCalled();
+  });
+
+  it("posts an empty string so the prop can be cleared", () => {
+    const ref = React.createRef<SelectableTextViewRef>();
+    const view = render(
+      <SelectableTextView ref={ref} content="<p>hi</p>" highlights="abc" />
+    );
+    fireLoadEnd();
+    mockPostMessage.mockClear();
+
+    view.rerender(
+      <SelectableTextView ref={ref} content="<p>hi</p>" highlights="" />
+    );
+
+    expect(lastPosted()).toEqual({
+      type: BridgingNames.functions.updateHighlights,
+      value: "",
+    });
+  });
+});
+
+describe("malformed bridge messages", () => {
+  it("ignores a non-JSON postMessage from page content", async () => {
+    const cb = jest.fn();
+    renderComponent({ onTextSelectionChange: cb });
+
+    await act(async () => {
+      await mockWebview.props.onMessage({
+        nativeEvent: { data: "not json at all" },
+      });
+    });
+
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it("ignores a JSON payload that is not one of ours", async () => {
+    const cb = jest.fn();
+    renderComponent({ onTextSelectionChange: cb });
+
+    await act(async () => {
+      await mockWebview.props.onMessage({
+        nativeEvent: { data: JSON.stringify({ hello: "world" }) },
+      });
+    });
+
+    expect(cb).not.toHaveBeenCalled();
+  });
+
+  it("does not let a throwing consumer callback escape the async handler", async () => {
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    renderComponent({
+      onTextSelectionChange: () => {
+        throw new Error("consumer blew up");
+      },
+    });
+
+    await expect(
+      fireMessage(BridgingNames.events.onTextSelectionChange, "x")
+    ).resolves.toBeUndefined();
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });
