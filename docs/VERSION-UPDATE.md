@@ -62,10 +62,29 @@ Every listed file should appear (and `versionCode` should be one higher than bef
 
 ## Suggested release flow
 
+Publishing is automated: the [`Release`](../.github/workflows/release.yml) workflow triggers on
+any pushed tag matching `v*.*.*`. Do **not** run `npm publish` by hand.
+
 1. Bump all files above and update `CHANGELOG.md`.
 2. Commit — `bump:` or `chore:` per the commit conventions, e.g. `bump: v1.1.0`.
-3. Tag the release: `git tag v1.1.0`.
-4. Publish: `npm publish` (the `prepublishOnly` script builds the package first).
+3. Push the commit to `main` and let CI pass.
+4. Tag and push the tag:
+   ```sh
+   git tag v1.1.0
+   git push origin v1.1.0
+   ```
+5. The workflow then, in order: verifies the tag matches `package.json`, checks the native files
+   for version drift (the table above), runs lint/test/typecheck, publishes to npm with
+   provenance (the `prepublishOnly` script builds first), and opens a GitHub Release with
+   generated notes.
+
+If the tag and `package.json` disagree, or any native file still holds the old version, the
+workflow fails **before** publishing. To recover, delete the tag (`git push --delete origin
+v1.1.0`), fix the versions, and re-tag.
+
+### Required repository secret
+
+- `NPM_TOKEN` — an npm automation token with publish rights on the `@majornutcracker` scope.
 
 > Tip: the native/gradle files duplicate the version by hand, which is easy to forget. A future
 > improvement is to read the version from `package.json` in `build.gradle` and expose the JS
