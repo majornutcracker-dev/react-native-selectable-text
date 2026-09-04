@@ -16,7 +16,7 @@ By contributing, you agree that your contributions are licensed under the projec
 ## Getting started
 
 ```sh
-git clone https://github.com/majornutcracker/react-native-selectable-text
+git clone https://github.com/majornutcracker-dev/react-native-selectable-text
 cd react-native-selectable-text
 nvm use
 corepack enable
