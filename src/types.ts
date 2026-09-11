@@ -122,6 +122,26 @@ export type Highlighter = {
     | HighlighterBackgroundImageOption;
 };
 
+/**
+ * Options for the ref methods that act on the current text selection.
+ */
+export type SelectionActionOptions = {
+  /**
+   * Keep the text selected after the action completes.
+   *
+   * Defaults to `false`: the selection is cleared, which also dismisses the
+   * platform's selection UI — on iOS the handles and the callout menu would
+   * otherwise stay on top of the highlight that was just created, hiding it and
+   * any entrance animation it has.
+   *
+   * Set this to `true` when you want to chain another action on the same text,
+   * for example highlighting and then copying it from a menu that stays open.
+   *
+   * @default false
+   */
+  keepSelection?: boolean;
+};
+
 export type HighlighterOptions = {
   /**
    * CSS selectors for elements excluded from visible highlights (e.g., 'a', '.ignored').
@@ -147,6 +167,36 @@ export type SelectableTextViewOptions = {
    * @default 2.5
    */
   maximumScale?: number;
+};
+
+/**
+ * Scroll behaviour used by {@link SelectableTextViewRef.focusHighlight}.
+ */
+export type FocusHighlightOptions = {
+  /**
+   * A boolean indicating whether to scroll the content to the highlight.
+   * Set it to false to apply the focus style in place.
+   * @default true
+   */
+  scroll?: boolean;
+  /**
+   * Where the highlight is aligned within the viewport once scrolled.
+   * "nearest" only scrolls when the highlight is outside the viewport.
+   * @default "center"
+   */
+  block?: "start" | "center" | "end" | "nearest";
+  /**
+   * The scrolling animation.
+   * @default "smooth"
+   */
+  behavior?: "smooth" | "auto";
+  /**
+   * The height in pixels of a band covered at the top of the viewport, such as a
+   * floating header. The highlight is aligned within the viewport minus that band,
+   * so it is never left underneath it.
+   * @default 0
+   */
+  offset?: number;
 };
 
 /**
@@ -189,21 +239,27 @@ export type SelectableTextViewRef = {
    * if it is not defined, the highlighting will not be applied.
    * @param name The name of the highlighter to apply to the selection.
    */
-  highlightSelection: (name?: HighlighterName) => void;
+  highlightSelection: (
+    name?: HighlighterName,
+    options?: SelectionActionOptions
+  ) => void;
   /**
    * A function that applies highlighting to the current selection with a highlighter name previously defined in the highlighters property;
    * if it is not defined, the highlighting will not be applied.
    * @param name The name of the highlighter to apply to the selection.
    * @param validation A callback function that will be called with the text of the selection if return true the highlighting will be applied.
+   * @param options See {@link SelectionActionOptions}.
    */
   highlightSelectionWithValidation: (
     validation: (text: string) => boolean | Promise<boolean>,
-    name?: HighlighterName
+    name?: HighlighterName,
+    options?: SelectionActionOptions
   ) => Promise<void>;
   /**
    * A function that removes the highlighting from the current selection
+   * @param options See {@link SelectionActionOptions}.
    */
-  unhighlightSelection: () => void;
+  unhighlightSelection: (options?: SelectionActionOptions) => void;
   /**
    * A function that removes all the highlights
    */
@@ -228,8 +284,15 @@ export type SelectableTextViewRef = {
    * @param id The id of the highlight
    * @param className The className to apply to the highlight, you can styles for this className in the css property.
    * If omitted, a default focus style (a box-shadow) is applied.
+   * @param options Scroll alignment, animation and offset. By default the highlight is
+   * centered in the viewport with a smooth animation; pass `{ scroll: false }` to apply
+   * the focus style without scrolling.
    */
-  focusHighlight: (id: string, className?: string) => void;
+  focusHighlight: (
+    id: string,
+    className?: string,
+    options?: FocusHighlightOptions
+  ) => void;
   /**
    * A function that removes the focus style from the currently focused highlight.
    * Use after `focusHighlight` to clear the visual focus state without removing the highlight.
@@ -277,6 +340,10 @@ export type SelectableTextViewPropsBase = {
    * A serialized string that represents the current highlights in the content. This can be used to restore the highlights when the component is re-rendered, for example when the user navigates away from the screen and then comes back.
    * You can obtain this string from getHighlights method or onHighlightsChange event.
    * You can also use as a state, the content will be re-rendered with the highlights applied whenever this string changes.
+   *
+   * A value the view itself just emitted through `onHighlightsChange` is ignored, so
+   * storing that value in state and passing it straight back is safe and will not
+   * replay the highlights.
    */
   highlights?: Highlights;
   /**
@@ -331,9 +398,11 @@ export type SelectableTextViewPropsBase = {
   /**
    * --> State property
    * Called when the serialized highlights change.
-   * @param highlights
+   * @param highlights The serialized payload, to persist and feed back into the `highlights` prop.
+   * @param items The highlights the payload contains, already resolved, so there is no
+   * need to follow every change with a `getAllHighlightsData()` call.
    */
-  onHighlightsChange?: (highlights: Highlights) => void;
+  onHighlightsChange?: (highlights: Highlights, items: HighlightData[]) => void;
   /**
    * --> State property
    * Called when an error occurs inside the WebView SDK (highlight restore, bridge, selection, etc.).

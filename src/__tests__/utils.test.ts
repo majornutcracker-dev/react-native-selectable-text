@@ -451,3 +451,114 @@ describe("htmlContent hardening against hostile input", () => {
     expect(html).not.toContain("Ev&quot;il");
   });
 });
+
+describe("focusHighlight scrolling", () => {
+  // scrollToHighlight lives inside the script injected into the WebView, so it
+  // is pulled out of the generated HTML and run against a fake window here.
+  function loadScrollToHighlight() {
+    const html = htmlContent({
+      hl: [
+        { name: "yh", options: { type: "background-color", color: "yellow" } },
+      ],
+      h: undefined,
+      c: "<p>hi</p>",
+      css: undefined,
+      f: undefined,
+      ho: undefined,
+      p: "ios",
+      o: { userScalable: true, initialScale: 1, maximumScale: 2.5 },
+    });
+    const blocks = html
+      .split("<script>")
+      .slice(1)
+      .map((block) => block.slice(0, block.indexOf("</script>")));
+    const script = blocks[blocks.length - 1];
+
+    const start = script.indexOf("function scrollToHighlight");
+    if (start === -1) throw new Error("scrollToHighlight not found");
+    let depth = 0;
+    let end = start;
+    for (let i = script.indexOf("{", start); i < script.length; i++) {
+      if (script[i] === "{") depth++;
+      else if (script[i] === "}") {
+        depth--;
+        if (depth === 0) {
+          end = i + 1;
+          break;
+        }
+      }
+    }
+    const source = script.slice(start, end);
+
+    return (fakeWindow: Record<string, unknown>) =>
+      new Function(
+        "window",
+        "document",
+        `${source}; return scrollToHighlight;`
+      )(fakeWindow, { documentElement: { scrollTop: 0 } }) as (
+        el: unknown,
+        opts: Record<string, unknown>
+      ) => void;
+  }
+
+  const build = (
+    { scrollTop = 0, innerHeight = 800 } = {} as {
+      scrollTop?: number;
+      innerHeight?: number;
+    }
+  ) => {
+    const scrollTo = jest.fn();
+    const win = { pageYOffset: scrollTop, innerHeight, scrollTo };
+    const fn = loadScrollToHighlight()(win);
+    const el = (top: number, height: number) => ({
+      getBoundingClientRect: () => ({ top: top - scrollTop, height }),
+      scrollIntoView: jest.fn(),
+    });
+    return { fn, el, scrollTo };
+  };
+
+  it("delegates to scrollIntoView when there is no offset", () => {
+    const { fn, el } = build();
+    const node = el(1000, 20);
+    fn(node, {});
+    expect(node.scrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth",
+      block: "center",
+    });
+  });
+
+  it("centers the highlight in the viewport below the offset band", () => {
+    const { fn, el, scrollTo } = build({ innerHeight: 800 });
+    // usable area = 800 - 100 = 700, so a 20px highlight sits 340px into it.
+    fn(el(1000, 20), { offset: 100 });
+    expect(scrollTo).toHaveBeenCalledWith({
+      top: 1000 - 100 - (700 - 20) / 2,
+      behavior: "smooth",
+    });
+  });
+
+  it("aligns to the top edge below the offset band", () => {
+    const { fn, el, scrollTo } = build();
+    fn(el(1000, 20), { block: "start", offset: 80, behavior: "auto" });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 920, behavior: "auto" });
+  });
+
+  it("never scrolls above the top of the document", () => {
+    const { fn, el, scrollTo } = build();
+    fn(el(10, 20), { block: "start", offset: 80 });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "smooth" });
+  });
+
+  it('leaves an already visible highlight alone with block "nearest"', () => {
+    const { fn, el, scrollTo } = build({ scrollTop: 500, innerHeight: 800 });
+    fn(el(700, 20), { block: "nearest", offset: 100 });
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it('scrolls a highlight hidden under the offset band with "nearest"', () => {
+    const { fn, el, scrollTo } = build({ scrollTop: 500, innerHeight: 800 });
+    // 550 sits inside the 100px band covering 500..600, so it counts as hidden.
+    fn(el(550, 20), { block: "nearest", offset: 100 });
+    expect(scrollTo).toHaveBeenCalledWith({ top: 450, behavior: "smooth" });
+  });
+});

@@ -562,13 +562,17 @@ export const htmlContent = ({
         if (type === BridgingNames.functions.updateHighlights) {
           updateHighlights(value); // highlights
         } else if (type === BridgingNames.functions.highlightSelection) {
-          highlightSelection(value ?? "yellow-highlighter"); // classApplierName
+          // { name, keepSelection }
+          highlightSelection(
+            value?.name ?? "yellow-highlighter",
+            value?.keepSelection === true
+          );
         } else if (type === BridgingNames.functions.unhighlightSelection) {
-          unhighlightSelection();
+          unhighlightSelection(value?.keepSelection === true); // { keepSelection }
         } else if (type === BridgingNames.functions.clearHighlights) {
           clearHighlights();
         } else if (type === BridgingNames.functions.focusHighlight) {
-          focusHighlight(value.id, value.className, value.scroll); // id, className, scroll
+          focusHighlight(value.id, value.className, value.options); // id, className, options
         } else if (type === BridgingNames.functions.unfocusHighlight) {
           unfocusHighlight();
         } else if (type === BridgingNames.functions.unhighlightById) {
@@ -605,9 +609,30 @@ export const htmlContent = ({
         postMessage(BridgingNames.events.onTextSelectionChange, text);
       }
 
+      // @sdk-internal
+      function collectHighlightsData() {
+        const highlights = __MNST__.highlighter.highlights || [];
+        return highlights.map((h) => ({
+          id: String(h.id),
+          name: h.classApplier.className,
+          text: h.getText ? h.getText() : "",
+        }));
+      }
+
       // @native-event
       function sendOnHighlightChange(highlights) {
-        postMessage(BridgingNames.events.onHighlightsChange, highlights);
+        // The items are already in memory at this point, so they ride along and
+        // save the consumer a getAllHighlightsData() round-trip per change.
+        let items = [];
+        try {
+          items = collectHighlightsData();
+        } catch (e) {
+          items = [];
+        }
+        postMessage(BridgingNames.events.onHighlightsChange, {
+          highlights: highlights,
+          items: items,
+        });
       }
 
       // @native-event
@@ -712,7 +737,7 @@ export const htmlContent = ({
       }
 
       // @sdk-internal-with-event
-      function highlightSelection(classApplierName) {
+      function highlightSelection(classApplierName, keepSelection) {
         try {
           const highlightNames = ${applierNames}
           if (!highlightNames.includes(classApplierName)) {
@@ -766,6 +791,9 @@ export const htmlContent = ({
             clearIgnoredElementsBackgroundColors();
             applyHighlightVisibilityClass(false, true);
             sendOnHighlightChange(__MNST__.highlighter.serialize());
+            if (!keepSelection) {
+              clearDomSelection();
+            }
           }
         } catch (e) {
           sendOnError(
@@ -777,7 +805,7 @@ export const htmlContent = ({
       }
 
       // @sdk-internal-with-event
-      function unhighlightSelection() {
+      function unhighlightSelection(keepSelection) {
         try {
           if (!__MNST__.selector.cache.range) {
             sendOnError(
@@ -803,6 +831,9 @@ export const htmlContent = ({
           __MNST__.highlighter.unhighlightSelection();
           clearIgnoredElementsBackgroundColors();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
+          if (!keepSelection) {
+            clearDomSelection();
+          }
         } catch (e) {
           sendOnError(
             "failed_to_unhighlight_selection",
@@ -829,7 +860,7 @@ export const htmlContent = ({
       }
 
       // @sdk-internal
-      function focusHighlight(id, className, scroll) {
+      function focusHighlight(id, className, options) {
         try {
           const highlight = findHighlightById(id);
           if (!highlight) {
@@ -843,8 +874,9 @@ export const htmlContent = ({
           clearHighlightFocusStyle();
           const elements = highlight.getHighlightElements();
           applyFocusStyle(elements, className);
-          if (scroll !== false && elements.length > 0 && elements[0].scrollIntoView) {
-            elements[0].scrollIntoView({ behavior: "smooth", block: "start" });
+          const opts = options || {};
+          if (opts.scroll !== false && elements.length > 0) {
+            scrollToHighlight(elements[0], opts);
           }
         } catch (e) {
           sendOnError(
@@ -913,13 +945,7 @@ export const htmlContent = ({
       // @sdk-internal-with-resolve
       function getAllHighlightsData(id) {
         try {
-          const highlights = __MNST__.highlighter.highlights || [];
-          const data = highlights.map((h) => ({
-            id: String(h.id),
-            name: h.classApplier.className,
-            text: h.getText ? h.getText() : "",
-          }));
-          sendGetAllHighlightsData(id, true, data, undefined);
+          sendGetAllHighlightsData(id, true, collectHighlightsData(), undefined);
         } catch (e) {
           console.error("Failed to get all highlights data: ", e);
           sendGetAllHighlightsData(id, false, undefined, e.message);
@@ -998,11 +1024,71 @@ export const htmlContent = ({
         return null;
       }
 
+      // Drops the DOM selection, which is what dismisses the platform selection
+      // UI (on iOS the handles and callout menu, on Android the action mode).
+      // The cached range is cleared here rather than waiting for the async
+      // "selectionchange" event, so a caller that acts immediately afterwards
+      // sees consistent state.
+      function clearDomSelection() {
+        const sel = document.getSelection();
+        if (sel) {
+          sel.removeAllRanges();
+        }
+        const hadText = __MNST__.selector.cache.text !== "";
+        __MNST__.selector.cache.text = "";
+        __MNST__.selector.cache.range = null;
+        if (hadText) {
+          sendOnTextSelectionChange("");
+        }
+      }
+
       function clearHighlightFocusStyle() {
         __MNST__.state.focusedElements.forEach((entry) => {
           entry.el.classList.remove(entry.className);
         });
         __MNST__.state.focusedElements = [];
+      }
+
+      // @sdk-internal
+      function scrollToHighlight(el, opts) {
+        const block = opts.block || "center";
+        const behavior = opts.behavior || "smooth";
+        const offset = typeof opts.offset === "number" ? opts.offset : 0;
+
+        if (!offset && el.scrollIntoView) {
+          el.scrollIntoView({ behavior: behavior, block: block });
+          return;
+        }
+
+        // "offset" is the height of the band covered at the top of the viewport
+        // (a floating header), so the usable area is the viewport minus it.
+        const rect = el.getBoundingClientRect();
+        const scrollTop =
+          window.pageYOffset || document.documentElement.scrollTop || 0;
+        const viewport = window.innerHeight;
+        const usable = Math.max(0, viewport - offset);
+        const elTop = rect.top + scrollTop;
+        const elBottom = elTop + rect.height;
+        let target;
+
+        if (block === "start") {
+          target = elTop - offset;
+        } else if (block === "end") {
+          target = elBottom - viewport;
+        } else if (block === "nearest") {
+          if (elTop >= scrollTop + offset && elBottom <= scrollTop + viewport) {
+            return;
+          }
+          target =
+            elTop < scrollTop + offset ? elTop - offset : elBottom - viewport;
+        } else {
+          target = elTop - offset - (usable - rect.height) / 2;
+        }
+
+        target = Math.max(0, target);
+        if (window.scrollTo) {
+          window.scrollTo({ top: target, behavior: behavior });
+        }
       }
 
       function applyFocusStyle(elements, className) {

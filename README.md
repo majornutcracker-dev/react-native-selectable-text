@@ -78,6 +78,9 @@ highlights on remount.
 Contributions are welcome! See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup,
 workflow, and commit conventions.
 
+Hit a blocker, need a feature, or found a bug? [Open an issue](https://github.com/majornutcracker-dev/react-native-selectable-text/issues)
+— we follow them closely and keep improving the library.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).

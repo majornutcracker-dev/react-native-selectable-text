@@ -9,6 +9,8 @@ import {
   type SelectableTextViewError,
   type HighlightData,
   type HighlighterName,
+  type SelectionActionOptions,
+  type FocusHighlightOptions,
 } from "./types";
 import { generatePromiseId, htmlContent } from "./utils";
 import { Linking, Platform } from "react-native";
@@ -50,6 +52,12 @@ const SelectableTextView = React.forwardRef<
 
   const webviewRef = React.useRef<WebView>(null);
 
+  // The last payload this view reported through onHighlightsChange, seeded with
+  // the value baked into the HTML so the very first echo is recognised too.
+  const lastEmittedHighlights = React.useRef<Highlights | undefined>(
+    highlights
+  );
+
   // Anything posted before the WebView document is ready is dropped on the
   // floor. Queue instead: a `highlights` change during the initial load would
   // otherwise be lost for good, and early imperative calls would reject with a
@@ -89,7 +97,14 @@ const SelectableTextView = React.forwardRef<
 
       try {
         if (data.type === BridgingNames.events.onHighlightsChange) {
-          onHighlightsChange?.(data.value as string);
+          const serialized = (data.value?.highlights ?? "") as Highlights;
+          // Remembered so the effect below can tell a genuine restore request
+          // from the consumer echoing back what this view just reported.
+          lastEmittedHighlights.current = serialized;
+          onHighlightsChange?.(
+            serialized,
+            (data.value?.items ?? []) as HighlightData[]
+          );
         } else if (data.type === BridgingNames.events.onTextSelectionChange) {
           onTextSelectionChange?.(data.value as string);
         } else if (data.type === BridgingNames.promises.getSelectedText) {
@@ -147,7 +162,7 @@ const SelectableTextView = React.forwardRef<
               value: {
                 id: data.value.id,
                 className,
-                scroll: false,
+                options: { scroll: false },
               },
             });
           }
@@ -239,6 +254,12 @@ const SelectableTextView = React.forwardRef<
       isFirstHighlightsEffect.current = false;
       return;
     }
+    // Echo of this view's own last change event: restoring it would wipe and
+    // re-deserialize the highlights the content already has, dropping the focus
+    // style and looping back through onHighlightsChange.
+    if (highlights === lastEmittedHighlights.current) {
+      return;
+    }
     _postMessage({
       type: BridgingNames.functions.updateHighlights,
       value: highlights,
@@ -254,28 +275,35 @@ const SelectableTextView = React.forwardRef<
     };
   }, []);
 
-  const highlightSelection = (highlighterName?: HighlighterName) => {
+  const highlightSelection = (
+    highlighterName?: HighlighterName,
+    options?: SelectionActionOptions
+  ) => {
     _postMessage({
       type: BridgingNames.functions.highlightSelection,
-      value: highlighterName,
+      value: {
+        name: highlighterName,
+        keepSelection: options?.keepSelection === true,
+      },
     });
   };
 
   const highlightSelectionWithValidation = async (
     validation: (text: string) => boolean | Promise<boolean>,
-    highlighterName?: HighlighterName
+    highlighterName?: HighlighterName,
+    options?: SelectionActionOptions
   ) => {
     const text = await getSelectedText();
     const result = await validation(text);
     if (result) {
-      highlightSelection(highlighterName);
+      highlightSelection(highlighterName, options);
     }
   };
 
-  const unhighlightSelection = () => {
+  const unhighlightSelection = (options?: SelectionActionOptions) => {
     _postMessage({
       type: BridgingNames.functions.unhighlightSelection,
-      value: undefined,
+      value: { keepSelection: options?.keepSelection === true },
     });
   };
 
@@ -286,12 +314,17 @@ const SelectableTextView = React.forwardRef<
     });
   };
 
-  const focusHighlight = (id: string, className?: string) => {
+  const focusHighlight = (
+    id: string,
+    className?: string,
+    options?: FocusHighlightOptions
+  ) => {
     _postMessage({
       type: BridgingNames.functions.focusHighlight,
       value: {
         id,
         className,
+        options,
       },
     });
   };

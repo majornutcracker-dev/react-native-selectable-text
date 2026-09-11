@@ -60,11 +60,24 @@ beforeEach(() => {
 });
 
 describe("incoming events", () => {
-  it("routes onHighlightsChange", async () => {
+  it("routes onHighlightsChange with the resolved items", async () => {
+    const cb = jest.fn();
+    const items = [{ id: "h1", name: "yh", text: "hello" }];
+    renderComponent({ onHighlightsChange: cb });
+    await fireMessage(BridgingNames.events.onHighlightsChange, {
+      highlights: "serialized",
+      items,
+    });
+    expect(cb).toHaveBeenCalledWith("serialized", items);
+  });
+
+  it("falls back to an empty item list", async () => {
     const cb = jest.fn();
     renderComponent({ onHighlightsChange: cb });
-    await fireMessage(BridgingNames.events.onHighlightsChange, "serialized");
-    expect(cb).toHaveBeenCalledWith("serialized");
+    await fireMessage(BridgingNames.events.onHighlightsChange, {
+      highlights: "serialized",
+    });
+    expect(cb).toHaveBeenCalledWith("serialized", []);
   });
 
   it("routes onTextSelectionChange", async () => {
@@ -112,7 +125,7 @@ describe("onHighlightPressed", () => {
     expect(onHighlightPressed).toHaveBeenCalledWith(payload);
     expect(lastPosted()).toEqual({
       type: BridgingNames.functions.focusHighlight,
-      value: { id: "h1", className: "focus-cls", scroll: false },
+      value: { id: "h1", className: "focus-cls", options: { scroll: false } },
     });
   });
 
@@ -155,17 +168,47 @@ describe("ref methods post the right messages", () => {
     act(() => ref.current!.highlightSelection("yh"));
     expect(lastPosted()).toEqual({
       type: BridgingNames.functions.highlightSelection,
-      value: "yh",
+      value: { name: "yh", keepSelection: false },
     });
   });
 
-  it("focusHighlight forwards id + className (and no scroll flag)", () => {
+  it("focusHighlight forwards id + className (and no options)", () => {
     const ref = renderComponent();
     mockPostMessage.mockClear();
     act(() => ref.current!.focusHighlight("h1", "cls"));
     expect(lastPosted()).toEqual({
       type: BridgingNames.functions.focusHighlight,
-      value: { id: "h1", className: "cls" },
+      value: { id: "h1", className: "cls", options: undefined },
+    });
+  });
+
+  it("focusHighlight forwards scroll options", () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+    act(() =>
+      ref.current!.focusHighlight("h1", "cls", {
+        block: "start",
+        behavior: "auto",
+        offset: 80,
+      })
+    );
+    expect(lastPosted()).toEqual({
+      type: BridgingNames.functions.focusHighlight,
+      value: {
+        id: "h1",
+        className: "cls",
+        options: { block: "start", behavior: "auto", offset: 80 },
+      },
+    });
+  });
+
+  it("focusHighlight can opt out of scrolling", () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+    act(() => ref.current!.focusHighlight("h1", undefined, { scroll: false }));
+    expect(lastPosted()).toEqual({
+      type: BridgingNames.functions.focusHighlight,
+      value: { id: "h1", className: undefined, options: { scroll: false } },
     });
   });
 
@@ -243,7 +286,7 @@ describe("WebView readiness", () => {
 
     expect(lastPosted()).toEqual({
       type: BridgingNames.functions.highlightSelection,
-      value: "yellow-highlighter",
+      value: { name: "yellow-highlighter", keepSelection: false },
     });
   });
 
@@ -338,5 +381,118 @@ describe("malformed bridge messages", () => {
     ).resolves.toBeUndefined();
     expect(spy).toHaveBeenCalled();
     spy.mockRestore();
+  });
+});
+
+describe("selection handling", () => {
+  it("clears the selection by default when highlighting", () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+    act(() => ref.current!.highlightSelection("yh"));
+    // keepSelection:false is what dismisses the iOS callout that would
+    // otherwise sit on top of the new highlight.
+    expect(lastPosted().value.keepSelection).toBe(false);
+  });
+
+  it("honours keepSelection on highlightSelection", () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+    act(() => ref.current!.highlightSelection("yh", { keepSelection: true }));
+    expect(lastPosted()).toEqual({
+      type: BridgingNames.functions.highlightSelection,
+      value: { name: "yh", keepSelection: true },
+    });
+  });
+
+  it("honours keepSelection on unhighlightSelection", () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+    act(() => ref.current!.unhighlightSelection({ keepSelection: true }));
+    expect(lastPosted()).toEqual({
+      type: BridgingNames.functions.unhighlightSelection,
+      value: { keepSelection: true },
+    });
+  });
+
+  it("forwards options through highlightSelectionWithValidation", async () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+    await act(async () => {
+      const pending = ref.current!.highlightSelectionWithValidation(
+        () => true,
+        "yh",
+        { keepSelection: true }
+      );
+      const posted = lastPosted();
+      await fireMessage(BridgingNames.promises.getSelectedText, {
+        success: true,
+        promiseId: posted.value,
+        text: "hello",
+      });
+      await pending;
+    });
+    expect(lastPosted().value).toEqual({ name: "yh", keepSelection: true });
+  });
+});
+
+describe("highlights prop echo suppression", () => {
+  function renderRerenderable(props: Partial<SelectableTextViewProps> = {}) {
+    const view = render(<SelectableTextView content="<p>hi</p>" {...props} />);
+    fireLoadEnd();
+    return (next: Partial<SelectableTextViewProps>) =>
+      view.rerender(
+        <SelectableTextView content="<p>hi</p>" {...props} {...next} />
+      );
+  }
+
+  const updateCalls = () =>
+    mockPostMessage.mock.calls
+      .map((call) => JSON.parse(call[0]))
+      .filter(
+        (message) => message.type === BridgingNames.functions.updateHighlights
+      );
+
+  it("ignores a value the view itself just reported", async () => {
+    const rerender = renderRerenderable({ highlights: "A" });
+    await fireMessage(BridgingNames.events.onHighlightsChange, {
+      highlights: "B",
+      items: [],
+    });
+    mockPostMessage.mockClear();
+
+    // What a controlled consumer does: store the emitted payload, pass it back.
+    rerender({ highlights: "B" });
+
+    expect(updateCalls()).toHaveLength(0);
+  });
+
+  it("still restores a payload the view did not emit", async () => {
+    const rerender = renderRerenderable({ highlights: "A" });
+    await fireMessage(BridgingNames.events.onHighlightsChange, {
+      highlights: "B",
+      items: [],
+    });
+    mockPostMessage.mockClear();
+
+    rerender({ highlights: "C" });
+
+    expect(updateCalls()).toEqual([
+      { type: BridgingNames.functions.updateHighlights, value: "C" },
+    ]);
+  });
+
+  it("still clears when reset to an empty string", async () => {
+    const rerender = renderRerenderable({ highlights: "A" });
+    await fireMessage(BridgingNames.events.onHighlightsChange, {
+      highlights: "B",
+      items: [],
+    });
+    mockPostMessage.mockClear();
+
+    rerender({ highlights: "" });
+
+    expect(updateCalls()).toEqual([
+      { type: BridgingNames.functions.updateHighlights, value: "" },
+    ]);
   });
 });

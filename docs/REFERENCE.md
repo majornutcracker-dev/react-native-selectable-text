@@ -9,23 +9,23 @@ This page is the full surface. For a quick start see the
 
 ## Props
 
-| Prop                 | Description                                                                                                                                                                                          |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `content`            | The HTML string rendered inside the WebView. Changing it does **not** re-render — remount the component to show new content.                                                                         |
-| `css`                | Injected styles for layout and typography. Scope your rules to a wrapper class to avoid clashing with the SDK's own classes.                                                                         |
-| `fonts`              | WebView font setup via `googleFonts()`, `mergeFonts()`, or custom `preconnect`, `stylesheets`, and `@font-face` rules. Multiple families are supported in a single config.                           |
-| `highlighters`       | Named highlight classes. A name must be a valid CSS class name — letters, digits, `-` and `_`, not starting with a digit — and invalid names are dropped with a console warning.                     |
-| `highlights`         | **State prop.** Serialized highlights to restore. `undefined` leaves the current highlights untouched; an empty string clears them. Obtain the value from `getHighlights()` or `onHighlightsChange`. |
-| `highlighterOptions` | `ignoredElements` — tags or selectors such as `a`, `sup`, `.ignored`. Ignored nodes skip the visible highlight but stay selectable and copyable.                                                     |
-| `options`            | Viewport zoom: `userScalable`, `initialScale`, `maximumScale`.                                                                                                                                       |
-| `webViewProps`       | Pass-through to `react-native-webview`. `javaScriptEnabled`, `source`, and `onShouldStartLoadWithRequest` are owned by the component and cannot be overridden.                                       |
+| Prop                 | Description                                                                                                                                                                                                                                                               |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content`            | The HTML string rendered inside the WebView. Changing it does **not** re-render — remount the component to show new content.                                                                                                                                              |
+| `css`                | Injected styles for layout and typography. Scope your rules to a wrapper class to avoid clashing with the SDK's own classes.                                                                                                                                              |
+| `fonts`              | WebView font setup via `googleFonts()`, `mergeFonts()`, or custom `preconnect`, `stylesheets`, and `@font-face` rules. Multiple families are supported in a single config.                                                                                                |
+| `highlighters`       | Named highlight classes. A name must be a valid CSS class name — letters, digits, `-` and `_`, not starting with a digit — and invalid names are dropped with a console warning.                                                                                          |
+| `highlights`         | **State prop.** Serialized highlights to restore. `undefined` leaves the current highlights untouched; an empty string clears them. Obtain the value from `getHighlights()` or `onHighlightsChange`. A value this view just emitted is ignored, so it is safe to control. |
+| `highlighterOptions` | `ignoredElements` — tags or selectors such as `a`, `sup`, `.ignored`. Ignored nodes skip the visible highlight but stay selectable and copyable.                                                                                                                          |
+| `options`            | Viewport zoom: `userScalable`, `initialScale`, `maximumScale`.                                                                                                                                                                                                            |
+| `webViewProps`       | Pass-through to `react-native-webview`. `javaScriptEnabled`, `source`, and `onShouldStartLoadWithRequest` are owned by the component and cannot be overridden.                                                                                                            |
 
 ## Callbacks
 
 | Callback                                     | Fires when                                                                                                                                                                           |
 | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `onTextSelectionChange(text)`                | The selection changes. Receives the selected text, or `""` when the selection is cleared.                                                                                            |
-| `onHighlightsChange(highlights)`             | The serialized highlight payload changes. Feed this back into the `highlights` prop to persist and restore.                                                                          |
+| `onHighlightsChange(highlights, items)`      | The serialized highlight payload changes. Receives the payload to persist, plus the `HighlightData[]` it contains — no `getAllHighlightsData()` round-trip needed.                   |
 | `onLink(url)`                                | A link is tapped. Without this prop, `http(s)` URLs open through `Linking`.                                                                                                          |
 | `onError(error)`                             | The WebView SDK reports an error: `{ code, message, details }`. Try highlighting over an existing highlight for `overlapping_highlight`, or with no selection for `empty_selection`. |
 | `onHighlightPressed(highlight)`              | A highlight is tapped. Receives `{ id, name, text }`. Return a `className` to style the pressed highlight (define it in `css`), or return nothing to leave it unstyled.              |
@@ -34,15 +34,54 @@ This page is the full surface. For a quick start see the
 A callback that throws is caught and logged rather than crashing the bridge, so
 a bug in your handler will not take the component down with it.
 
+### Controlling the highlights
+
+`onHighlightsChange` hands you both halves of the state at once, so the usual
+wiring is a plain controlled component:
+
+```tsx
+const [highlights, setHighlights] = useState("");
+const [items, setItems] = useState<HighlightData[]>([]);
+
+<SelectableTextView
+  highlights={highlights}
+  onHighlightsChange={(serialized, list) => {
+    setHighlights(serialized);
+    setItems(list); // ids, names and text — already resolved
+  }}
+/>;
+```
+
+Passing the emitted value straight back does **not** replay the highlights: the
+view remembers the last payload it reported and skips restoring an echo of it.
+Restoring is reserved for a payload it did not produce — a value loaded from
+storage, a different document, or `""` to clear.
+
 ## Ref API
 
 ### Highlighting
 
-- **`highlightSelection(name?)`** — applies a highlighter to the cached selection.
-- **`highlightSelectionWithValidation(validation, name?)`** — highlights only if `validation(text)` returns, or resolves to, `true`.
-- **`unhighlightSelection()`** — removes the highlight from the cached selection.
+- **`highlightSelection(name?, options?)`** — applies a highlighter to the cached selection.
+- **`highlightSelectionWithValidation(validation, name?, options?)`** — highlights only if `validation(text)` returns, or resolves to, `true`.
+- **`unhighlightSelection(options?)`** — removes the highlight from the cached selection.
 - **`unhighlightById(id)`** — removes a single highlight.
 - **`clearHighlights()`** — removes every highlight from the content.
+
+#### `SelectionActionOptions`
+
+The three methods that act on a selection accept `{ keepSelection?: boolean }`.
+
+By default the selection is **cleared** once the action completes, which also
+dismisses the platform's selection UI. This matters most on iOS, where the
+selection handles and the callout menu would otherwise stay on top of the
+highlight that was just created — hiding it, and any entrance animation it has.
+
+Pass `{ keepSelection: true }` when you want to chain another action on the same
+text, for example highlighting and then copying from a menu that stays open.
+
+```ts
+ref.current?.highlightSelection("yellow", { keepSelection: true });
+```
 
 ### Reading state
 
@@ -53,7 +92,33 @@ a bug in your handler will not take the component down with it.
 
 ### Focus and visibility
 
-- **`focusHighlight(id, className?)`** — scrolls to a highlight and applies a focus style. Pass a `className` to style it through `css`, or omit it for the default focus style.
+- **`focusHighlight(id, className?, options?)`** — scrolls to a highlight and applies a focus style. Pass a `className` to style it through `css`, or omit it for the default focus style. `options` controls the scroll:
+
+```ts
+type FocusHighlightOptions = {
+  scroll?: boolean; // default true — false applies the style in place
+  block?: "start" | "center" | "end" | "nearest"; // default "center"
+  behavior?: "smooth" | "auto"; // default "smooth"
+  offset?: number; // default 0 — px covered at the top of the viewport
+};
+```
+
+`offset` is the height of a band covered at the top of the viewport, such as a
+floating header. The highlight is aligned within the viewport minus that band, so
+it never lands underneath it. With `block: "nearest"` a highlight hidden behind
+the band counts as off-screen and is scrolled into view.
+
+```ts
+// Default: centered, smooth.
+ref.current?.focusHighlight(id);
+
+// Pinned below a 96px floating header.
+ref.current?.focusHighlight(id, "focused", { block: "start", offset: 96 });
+
+// Style it without moving the content.
+ref.current?.focusHighlight(id, "focused", { scroll: false });
+```
+
 - **`unfocusHighlight()`** — removes the focus style without deleting the highlight.
 - **`toggleHighlightsVisibility(): Promise<boolean>`** — hides or shows highlights without deleting them; resolves with the new visibility. On a document with no highlights it still flips the state, so a toggle control stays in sync.
 
