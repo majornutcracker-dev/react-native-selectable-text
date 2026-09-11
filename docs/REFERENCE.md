@@ -12,7 +12,7 @@ This page is the full surface. For a quick start see the
 | Prop                 | Description                                                                                                                                                                                                                                                               |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `content`            | The HTML string rendered inside the WebView. Changing it does **not** re-render — remount the component to show new content.                                                                                                                                              |
-| `css`                | Injected styles for layout and typography. Scope your rules to a wrapper class to avoid clashing with the SDK's own classes.                                                                                                                                              |
+| `css`                | Injected styles for layout and typography. Declared after the generated highlighter classes, so your rules win on equal specificity and can restyle or re-animate a highlight.                                                                                            |
 | `fonts`              | WebView font setup via `googleFonts()`, `mergeFonts()`, or custom `preconnect`, `stylesheets`, and `@font-face` rules. Multiple families are supported in a single config.                                                                                                |
 | `highlighters`       | Named highlight classes. A name must be a valid CSS class name — letters, digits, `-` and `_`, not starting with a digit — and invalid names are dropped with a console warning.                                                                                          |
 | `highlights`         | **State prop.** Serialized highlights to restore. `undefined` leaves the current highlights untouched; an empty string clears them. Obtain the value from `getHighlights()` or `onHighlightsChange`. A value this view just emitted is ignored, so it is safe to control. |
@@ -64,7 +64,20 @@ storage, a different document, or `""` to clear.
 - **`highlightSelection(name?, options?)`** — applies a highlighter to the cached selection.
 - **`highlightSelectionWithValidation(validation, name?, options?)`** — highlights only if `validation(text)` returns, or resolves to, `true`.
 - **`unhighlightSelection(options?)`** — removes the highlight from the cached selection.
-- **`unhighlightById(id)`** — removes a single highlight.
+- **`unhighlightById(id, options?)`** — removes a single highlight. Pass `{ className, delay }` to play an exit animation first: the class is added, the wait happens inside the WebView, and the node is deleted when it ends.
+
+```tsx
+// css: .highlight-exit { animation: fadeOut 400ms forwards; }
+ref.current?.unhighlightById(id, { className: "highlight-exit", delay: 400 });
+```
+
+There is no timer to cancel on unmount. A highlight already staged for removal
+is left alone rather than restarted, and one that disappears during the wait —
+a `clearHighlights()`, a restore — is not reported as an error.
+
+The class is taken back off in the same tick as the removal, so `forwards` is
+safe to use and the animation's end state is never stranded on the text.
+
 - **`clearHighlights()`** — removes every highlight from the content.
 
 #### `SelectionActionOptions`
@@ -242,6 +255,21 @@ const fonts = googleFonts({
   entries.
 - **`fontsToCSS(fonts)`** / **`fontsToHeadMarkup(fonts)`** — the raw `@font-face`
   CSS and the head markup, if you need to inspect or inline them yourself.
+
+## Styling highlights
+
+Each highlighter's `options` are compiled into a `.<name>` rule, and the `css`
+prop is injected **after** those rules. Both are single-class selectors, so
+yours wins by being declared later — which is what makes an exit animation
+possible: a rule of yours targeting the highlight can override the `animation`
+the highlighter itself sets.
+
+The one exception is the hidden state used by `toggleHighlightsVisibility()`,
+which is marked `!important` and cannot be overridden.
+
+Classes the SDK adds to a highlight — a focus style, a staged exit — are always
+removed before the highlight itself is, because a span left carrying an extra
+class cannot be unwrapped and would keep whatever that class styles.
 
 ## Ignored elements
 

@@ -434,7 +434,6 @@ export const htmlContent = ({
     ${fontsHeadMarkup}
     <style>
       ${fontsCSS}
-      ${style}
       html,
       body {
         margin: 0;
@@ -442,15 +441,22 @@ export const htmlContent = ({
         width: 100%;
       }
       ${cssClasses}
+      .mnst-default-focus {
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+      }
+      /* The consumer's CSS comes last so it wins on equal specificity: a rule
+         of theirs targeting a highlight (an exit animation, say) has to be able
+         to override the generated highlighter class, which is a single class
+         too and would otherwise win just by being declared later. */
+      ${style}
+      /* Visibility is the one thing they cannot override: it is toggled at
+         runtime and is marked !important for that reason. */
       .mnst-highlighter-hidden {
         background-color: transparent !important;
         background-image: none !important;
         outline-color: transparent !important;
         text-decoration-color: transparent !important;
         animation: none !important;
-      }
-      .mnst-default-focus {
-        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
       }
     </style>
   </head>
@@ -492,6 +498,8 @@ export const htmlContent = ({
           state: {
             focusedElements: [],
             visible: true,
+            // id -> timer, for removals waiting on an exit animation.
+            pendingRemovals: {},
           },
           // constants
           platform: {
@@ -576,7 +584,7 @@ export const htmlContent = ({
         } else if (type === BridgingNames.functions.unfocusHighlight) {
           unfocusHighlight();
         } else if (type === BridgingNames.functions.unhighlightById) {
-          unhighlightById(value); // id
+          unhighlightById(value.id, value.options); // id, options
         } else if (type === BridgingNames.promises.getSelectedText) {
           getSelectedText(value); // promiseId
         } else if (type === BridgingNames.promises.getHighlights) {
@@ -720,6 +728,7 @@ export const htmlContent = ({
         }
         try {
           clearHighlightFocusStyle();
+          flushPendingExitClasses();
           __MNST__.highlighter.removeAllHighlights();
           if (highlights) {
             __MNST__.highlighter.deserialize(highlights);
@@ -828,6 +837,7 @@ export const htmlContent = ({
             return;
           }
           clearHighlightFocusStyle();
+          flushPendingExitClasses();
           __MNST__.highlighter.unhighlightSelection();
           clearIgnoredElementsBackgroundColors();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
@@ -846,9 +856,12 @@ export const htmlContent = ({
       // @sdk-internal-with-event
       function clearHighlights() {
         try {
+          // Before the removal: a span still carrying one of these classes is
+          // not removable, so Rangy would leave it behind.
+          clearHighlightFocusStyle();
+          flushPendingExitClasses();
           __MNST__.highlighter.removeAllHighlights();
           clearIgnoredElementsBackgroundColors();
-          clearHighlightFocusStyle();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
           sendOnError(
@@ -893,7 +906,10 @@ export const htmlContent = ({
       }
 
       // @sdk-internal-with-event
-      function unhighlightById(id) {
+      function unhighlightById(id, options) {
+        const opts = options || {};
+        const delay =
+          typeof opts.delay === "number" && opts.delay > 0 ? opts.delay : 0;
         try {
           const highlight = findHighlightById(id);
           if (!highlight) {
@@ -904,7 +920,95 @@ export const htmlContent = ({
             );
             return;
           }
+          if (!delay) {
+            removeHighlightNow(id, false);
+            return;
+          }
+          // Already staged: keep the running animation rather than restarting it.
+          if (__MNST__.state.pendingRemovals[id]) {
+            return;
+          }
+          if (opts.className) {
+            // Deliberately not tracked as a focus style: a focusHighlight() call
+            // in the meantime clears those, killing the exit animation.
+            setExitClass(highlight, opts.className, true);
+          }
+          __MNST__.state.pendingRemovals[id] = {
+            className: opts.className,
+            timer: setTimeout(function () {
+              delete __MNST__.state.pendingRemovals[id];
+              // The highlight may be gone by now (clearHighlights, a restore),
+              // which is not an error: the caller got what it asked for.
+              removeHighlightNow(id, true, opts.className);
+            }, delay),
+          };
+        } catch (e) {
+          sendOnError(
+            "failed_to_unhighlight_by_id",
+            "Failed to unhighlight by id",
+            e?.message ?? String(e)
+          );
+        }
+      }
+
+      // @sdk-internal
+      function setExitClass(highlight, className, on) {
+        if (!className) {
+          return;
+        }
+        highlight.getHighlightElements().forEach(function (el) {
+          if (on) {
+            el.classList.add(className);
+          } else {
+            el.classList.remove(className);
+          }
+        });
+      }
+
+      /**
+       * Cancels every staged removal and takes its class back off.
+       *
+       * Rangy only unwraps a highlight's span when its class list is exactly
+       * the highlighter class; any extra class left on it makes Rangy keep the
+       * element and merely drop its own class. An exit animation with
+       * "forwards" would then be stranded on the text for good, so a bulk
+       * removal has to strip these first.
+       *
+       * @sdk-internal
+       */
+      function flushPendingExitClasses() {
+        const pending = __MNST__.state.pendingRemovals;
+        Object.keys(pending).forEach(function (id) {
+          const entry = pending[id];
+          if (!entry) {
+            return;
+          }
+          clearTimeout(entry.timer);
+          delete pending[id];
+          const highlight = findHighlightById(id);
+          if (highlight) {
+            setExitClass(highlight, entry.className, false);
+          }
+        });
+      }
+
+      // @sdk-internal-with-event
+      function removeHighlightNow(id, silentIfMissing, exitClassName) {
+        try {
+          const highlight = findHighlightById(id);
+          if (!highlight) {
+            if (!silentIfMissing) {
+              sendOnError(
+                "highlight_not_found",
+                "Highlight not found",
+                "No highlight registered for id: " + String(id)
+              );
+            }
+            return;
+          }
           clearHighlightFocusStyle();
+          // Same tick as the removal, so the restored styles are never painted.
+          setExitClass(highlight, exitClassName, false);
           __MNST__.highlighter.removeHighlights([highlight]);
           clearIgnoredElementsBackgroundColors();
           sendOnHighlightChange(__MNST__.highlighter.serialize());

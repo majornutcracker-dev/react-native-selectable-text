@@ -170,6 +170,28 @@ export type SelectableTextViewOptions = {
 };
 
 /**
+ * Options for {@link SelectableTextViewRef.unhighlightById}.
+ */
+export type UnhighlightOptions = {
+  /**
+   * A className added to the highlight before it is removed, so an exit
+   * animation defined in the `css` prop can play. Pair it with `delay`.
+   */
+  className?: string;
+  /**
+   * Milliseconds to wait before the highlight is actually removed. Keep it in
+   * sync with the duration of the animation on `className`.
+   *
+   * The wait happens inside the WebView, so there is no timer to track or
+   * cancel on unmount. A highlight already staged for removal is left alone
+   * rather than restarted, and one that disappears during the wait (a
+   * `clearHighlights()`, a restore) is not reported as an error.
+   * @default 0
+   */
+  delay?: number;
+};
+
+/**
  * Scroll behaviour used by {@link SelectableTextViewRef.focusHighlight}.
  */
 export type FocusHighlightOptions = {
@@ -301,8 +323,10 @@ export type SelectableTextViewRef = {
   /**
    * A function that removes a highlight by its id
    * @param id
+   * @param options Pass `{ className, delay }` to play an exit animation before
+   * the highlight is removed. See {@link UnhighlightOptions}.
    */
-  unhighlightById: (id: string) => void;
+  unhighlightById: (id: string, options?: UnhighlightOptions) => void;
   /**
    * A promise that returns all the highlights data
    * @throws js Error

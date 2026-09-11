@@ -562,3 +562,144 @@ describe("focusHighlight scrolling", () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 450, behavior: "smooth" });
   });
 });
+
+describe("stylesheet ordering", () => {
+  const styleBlock = () => {
+    const html = htmlContent({
+      hl: [
+        {
+          name: "azure-sweep",
+          options: {
+            type: "background-color",
+            color: "#bae6fd",
+            animation: {
+              name: "azureSweep",
+              keyframesCss: "@keyframes azureSweep { 0%{opacity:0} }",
+              duration: "760ms",
+              timingFunction: "ease",
+              iterationCount: 1,
+            },
+          },
+        },
+      ],
+      h: undefined,
+      c: "<p>hi</p>",
+      css: ".highlight-exit { animation: highlightExit 1s ease forwards; }",
+      f: undefined,
+      ho: undefined,
+      p: "ios",
+      o: { userScalable: false, initialScale: 1, maximumScale: 2 },
+    });
+    return html.slice(html.indexOf("<style>"), html.indexOf("</style>"));
+  };
+
+  it("lets a consumer rule override a generated highlighter class", () => {
+    // Both are single-class selectors, so the one declared later wins. An exit
+    // animation on a highlight used to lose to the highlighter's own animation
+    // and simply never played.
+    const style = styleBlock();
+    expect(style.indexOf(".highlight-exit")).toBeGreaterThan(
+      style.indexOf(".azure-sweep")
+    );
+  });
+
+  it("keeps the hidden state out of the consumer's reach", () => {
+    // Visibility is toggled at runtime, so it must survive consumer CSS.
+    const style = styleBlock();
+    expect(style.indexOf(".mnst-highlighter-hidden")).toBeGreaterThan(
+      style.indexOf(".highlight-exit")
+    );
+    expect(style).toContain("animation: none !important");
+  });
+});
+
+describe("staged removal", () => {
+  /** Pulls one function's source out of the script injected into the WebView. */
+  function injectedFunctionSource(name: string): string {
+    const html = htmlContent({
+      hl: [
+        { name: "yh", options: { type: "background-color", color: "yellow" } },
+      ],
+      h: undefined,
+      c: "<p>hi</p>",
+      css: undefined,
+      f: undefined,
+      ho: undefined,
+      p: "ios",
+      o: { userScalable: true, initialScale: 1, maximumScale: 2.5 },
+    });
+    const blocks = html
+      .split("<script>")
+      .slice(1)
+      .map((block) => block.slice(0, block.indexOf("</script>")));
+    const script = blocks[blocks.length - 1];
+
+    const start = script.indexOf("function " + name);
+    if (start === -1) throw new Error(name + " not found");
+    let depth = 0;
+    for (let i = script.indexOf("{", start); i < script.length; i++) {
+      if (script[i] === "{") depth++;
+      else if (script[i] === "}") {
+        depth--;
+        if (depth === 0) return script.slice(start, i + 1);
+      }
+    }
+    throw new Error(name + " is unbalanced");
+  }
+
+  function fakeElement(classes: string[]) {
+    const set = new Set(classes);
+    return {
+      set,
+      classList: {
+        add: (c: string) => set.add(c),
+        remove: (c: string) => set.delete(c),
+      },
+    };
+  }
+
+  it("takes the exit class off before Rangy removes the highlight", () => {
+    // Rangy only unwraps the span when its class list is exactly the highlighter
+    // class. With the exit class still on, it keeps the element and strips only
+    // its own class, stranding an animation's final state on the text forever.
+    const el = fakeElement(["yh", "highlight-exit"]);
+    const highlight = { getHighlightElements: () => [el] };
+
+    let classesAtRemoval: string[] = [];
+    const MNST = {
+      state: { pendingRemovals: {} },
+      highlighter: {
+        removeHighlights: () => {
+          classesAtRemoval = [...el.set];
+        },
+        serialize: () => "",
+      },
+    };
+
+    const source = [
+      injectedFunctionSource("setExitClass"),
+      injectedFunctionSource("removeHighlightNow"),
+    ].join("\n");
+
+    const removeHighlightNow = new Function(
+      "__MNST__",
+      "findHighlightById",
+      "clearHighlightFocusStyle",
+      "clearIgnoredElementsBackgroundColors",
+      "sendOnHighlightChange",
+      "sendOnError",
+      `${source}; return removeHighlightNow;`
+    )(
+      MNST,
+      () => highlight,
+      () => {},
+      () => {},
+      () => {},
+      () => {}
+    ) as (id: string, silent: boolean, className?: string) => void;
+
+    removeHighlightNow("h1", false, "highlight-exit");
+
+    expect(classesAtRemoval).toEqual(["yh"]);
+  });
+});

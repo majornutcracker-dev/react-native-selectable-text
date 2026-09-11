@@ -218,7 +218,25 @@ describe("ref methods post the right messages", () => {
     act(() => ref.current!.unhighlightById("h9"));
     expect(lastPosted()).toEqual({
       type: BridgingNames.functions.unhighlightById,
-      value: "h9",
+      value: { id: "h9", options: undefined },
+    });
+  });
+
+  it("unhighlightById forwards the staged-removal options", () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+    act(() =>
+      ref.current!.unhighlightById("h9", {
+        className: "highlight-exit",
+        delay: 1000,
+      })
+    );
+    expect(lastPosted()).toEqual({
+      type: BridgingNames.functions.unhighlightById,
+      value: {
+        id: "h9",
+        options: { className: "highlight-exit", delay: 1000 },
+      },
     });
   });
 });

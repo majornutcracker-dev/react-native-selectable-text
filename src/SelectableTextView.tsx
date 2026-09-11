@@ -11,6 +11,7 @@ import {
   type HighlighterName,
   type SelectionActionOptions,
   type FocusHighlightOptions,
+  type UnhighlightOptions,
 } from "./types";
 import { generatePromiseId, htmlContent } from "./utils";
 import { Linking, Platform } from "react-native";
@@ -336,10 +337,10 @@ const SelectableTextView = React.forwardRef<
     });
   };
 
-  const unhighlightById = (id: string) => {
+  const unhighlightById = (id: string, options?: UnhighlightOptions) => {
     _postMessage({
       type: BridgingNames.functions.unhighlightById,
-      value: id,
+      value: { id, options },
     });
   };
 
