@@ -1,7 +1,7 @@
 {
   "name": "@majornutcracker/react-native-selectable-text",
   "version": "1.0.0",
-  "description": "A Majornutcracker Expo module for react-native-webview that enables advanced text selection, custom menus, and persistent highlighting via Rangy. Native iOS and Android bridge (Swift/Kotlin) to serialize, sync, and restore HTML content selections.",
+  "description": "A Majornutcracker Expo module for react-native-webview that enables advanced text selection, custom menus, and persistent highlighting via Rangy. Serialize, sync, and restore HTML content selections.",
   "main": "build/index.js",
   "types": "build/index.d.ts",
   "type": "module",
