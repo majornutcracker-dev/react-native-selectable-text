@@ -1,6 +1,5 @@
-import React from "react";
-import MainTest from "@/screens/MainTest";
+import Library from "@/screens/Library";
 
 export default function Index() {
-  return <MainTest />;
+  return <Library />;
 }

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef } from "react";
 import { Animated, PanResponder, StyleSheet, Text, View } from "react-native";
 
+import { theme } from "@/constants/theme";
+
 const ENTER_OFFSET = -72;
 const DISMISS_SWIPE_THRESHOLD = -48;
 const ENTER_DURATION_MS = 280;
@@ -170,7 +172,7 @@ const styles = StyleSheet.create({
   toast: {
     width: "100%",
     maxWidth: 420,
-    backgroundColor: "#fff",
+    backgroundColor: theme.color.bgCard,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,

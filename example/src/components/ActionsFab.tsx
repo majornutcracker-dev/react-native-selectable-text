@@ -13,12 +13,16 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useToastNotification } from "@/context/ToastNotificationProvider";
 
+import { theme } from "@/constants/theme";
+
 const FAB_ITEM_SIZE = 44;
 const FAB_ITEM_GAP = 12;
 const FAB_BOTTOM = 16;
 
 type ActionsFabProps = {
   selectableTextViewRef: RefObject<SelectableTextViewRef | null>;
+  /** Reader accent, so the FAB picks up the current document's colour. */
+  accent?: string;
   onClearHighlights: () => void;
 };
 
@@ -51,7 +55,7 @@ export function ActionsFab(props: ActionsFabProps) {
     {
       key: "highlights",
       label: "Get Highlights",
-      tint: "#F59E0B",
+      tint: theme.highlight.amber.base,
       icon: "highlights",
       onPress: async () => {
         try {
@@ -74,7 +78,7 @@ export function ActionsFab(props: ActionsFabProps) {
     {
       key: "all-highlights-data",
       label: "All Highlights Data",
-      tint: "#8B5CF6",
+      tint: theme.color.accentSoft,
       icon: "highlights-data",
       onPress: async () => {
         try {
@@ -92,7 +96,7 @@ export function ActionsFab(props: ActionsFabProps) {
     {
       key: "selected-text",
       label: "Get Selected Text",
-      tint: "#3B82F6",
+      tint: theme.highlight.azure.base,
       icon: "selection",
       onPress: async () => {
         try {
@@ -107,7 +111,7 @@ export function ActionsFab(props: ActionsFabProps) {
     {
       key: "toggle-highlights-visibility",
       label: highlightsVisible ? "Hide Highlights" : "Show Highlights",
-      tint: "#10B981",
+      tint: theme.highlight.mint.base,
       icon: "toggle-highlights",
       onPress: async () => {
         try {
@@ -124,7 +128,7 @@ export function ActionsFab(props: ActionsFabProps) {
     {
       key: "visibility-state",
       label: "Visibility State",
-      tint: "#0EA5E9",
+      tint: props.accent ?? theme.color.accent,
       icon: "toggle-highlights",
       onPress: async () => {
         try {
@@ -141,7 +145,7 @@ export function ActionsFab(props: ActionsFabProps) {
     {
       key: "clear-highlights",
       label: "Clear Highlights",
-      tint: "#EF4444",
+      tint: theme.color.danger,
       icon: "clear-highlights",
       onPress: () => {
         props.onClearHighlights();
@@ -464,7 +468,7 @@ const styles = StyleSheet.create({
   },
   fabBackdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(15, 23, 42, 0.18)",
+    backgroundColor: theme.color.scrim,
   },
   actionsFabStack: {
     position: "absolute",
@@ -484,27 +488,27 @@ const styles = StyleSheet.create({
     minWidth: 160,
     fontSize: 13,
     fontWeight: "600",
-    color: "#0F172A",
+    color: theme.color.text,
     textAlign: "center",
-    backgroundColor: "rgba(255, 255, 255, 0.96)",
+    backgroundColor: theme.color.bgCard,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 8,
     overflow: "hidden",
-    shadowColor: "#0F172A",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
     shadowRadius: 4,
     elevation: 3,
   },
   actionsFabMain: {
-    backgroundColor: "#334155",
+    backgroundColor: theme.color.bgRaised,
   },
   actionFabButtonOuter: {
     padding: 3,
     borderRadius: FAB_ITEM_SIZE / 2,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    shadowColor: "#0F172A",
+    backgroundColor: theme.color.bgElevated,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.16,
     shadowRadius: 8,
@@ -516,7 +520,7 @@ const styles = StyleSheet.create({
     borderRadius: (FAB_ITEM_SIZE - 6) / 2,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.color.bgCard,
     borderWidth: 2,
   },
   highlightIcon: {
@@ -628,7 +632,7 @@ const styles = StyleSheet.create({
   },
   fabMainShadow: {
     borderRadius: FAB_ITEM_SIZE / 2,
-    shadowColor: "#0F172A",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.28,
     shadowRadius: 16,
@@ -641,7 +645,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
-    borderColor: "#FFFFFF",
+    borderColor: theme.color.border,
   },
   fabMainPressed: {
     opacity: 0.92,
@@ -657,16 +661,16 @@ const styles = StyleSheet.create({
     width: 14,
     height: 2.5,
     borderRadius: 2,
-    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    backgroundColor: theme.color.bgRaised,
   },
   fabMainIconBarV: {
     position: "absolute",
     width: 2.5,
     height: 14,
     borderRadius: 2,
-    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    backgroundColor: theme.color.bgRaised,
   },
   fabMainIconBarLight: {
-    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    backgroundColor: theme.color.text,
   },
 });

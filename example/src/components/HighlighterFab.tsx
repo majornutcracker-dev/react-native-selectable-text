@@ -20,6 +20,8 @@ import {
   type HighlighterAsset,
 } from "@/constants/highlighters";
 
+import { theme } from "@/constants/theme";
+
 const FAB_ITEM_SIZE = 44;
 const FAB_ITEM_GAP = 12;
 const FAB_BOTTOM = 16;
@@ -159,7 +161,7 @@ function getFabMainStyle(asset: HighlighterAsset | undefined) {
   if (asset && isColorHighlighterType(asset.type) && asset.color) {
     return { backgroundColor: asset.color };
   }
-  return { backgroundColor: "#ffffff" };
+  return { backgroundColor: theme.color.bgCard };
 }
 
 function HighlighterSwatch(props: {
@@ -208,7 +210,10 @@ function HighlighterSwatch(props: {
           </View>
         ) : (
           <View
-            style={[styles.fabSwatch, { backgroundColor: color ?? "#94A3B8" }]}
+            style={[
+              styles.fabSwatch,
+              { backgroundColor: color ?? theme.color.textFaint },
+            ]}
           >
             <SwatchTypeIndicator type={props.asset?.type} />
           </View>
@@ -238,7 +243,7 @@ const styles = StyleSheet.create({
   },
   fabBackdrop: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: "rgba(15, 23, 42, 0.18)",
+    backgroundColor: theme.color.scrim,
   },
   colorFabStack: {
     position: "absolute",
@@ -253,7 +258,7 @@ const styles = StyleSheet.create({
   },
   fabMainShadow: {
     borderRadius: FAB_ITEM_SIZE / 2,
-    shadowColor: "#0F172A",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.28,
     shadowRadius: 16,
@@ -266,7 +271,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
-    borderColor: "#FFFFFF",
+    borderColor: theme.color.border,
     overflow: "hidden",
   },
   fabMainImage: {
@@ -286,25 +291,25 @@ const styles = StyleSheet.create({
     width: 14,
     height: 2.5,
     borderRadius: 2,
-    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    backgroundColor: theme.color.bgRaised,
   },
   fabMainIconBarV: {
     position: "absolute",
     width: 2.5,
     height: 14,
     borderRadius: 2,
-    backgroundColor: "rgba(15, 23, 42, 0.75)",
+    backgroundColor: theme.color.bgRaised,
   },
   fabSwatchOuter: {
     padding: 3,
     borderRadius: FAB_ITEM_SIZE / 2,
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    backgroundColor: theme.color.bgElevated,
   },
   fabSwatchOuterSelected: {
     padding: 4,
     borderWidth: 2,
-    borderColor: "#0F172A",
-    shadowColor: "#0F172A",
+    borderColor: theme.color.border,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
     shadowRadius: 8,
@@ -317,7 +322,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
-    borderColor: "rgba(15, 23, 42, 0.12)",
+    borderColor: theme.color.hairline,
     overflow: "hidden",
   },
   fabSwatchImage: {
@@ -330,14 +335,14 @@ const styles = StyleSheet.create({
     width: 18,
     height: 2.5,
     borderRadius: 2,
-    backgroundColor: "rgba(15, 23, 42, 0.55)",
+    backgroundColor: theme.color.bgRaised,
   },
   swatchOutlineSquare: {
     width: 12,
     height: 12,
     borderRadius: 2,
     borderWidth: 2,
-    borderColor: "rgba(15, 23, 42, 0.55)",
+    borderColor: theme.color.border,
     backgroundColor: "transparent",
   },
 });

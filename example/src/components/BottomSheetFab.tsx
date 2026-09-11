@@ -2,6 +2,8 @@ import { useRef } from "react";
 import { Animated, Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { theme } from "@/constants/theme";
+
 const FAB_BOTTOM = 16;
 
 type BottomSheetFabProps = {
@@ -76,7 +78,7 @@ const styles = StyleSheet.create({
   },
   fabMainShadow: {
     borderRadius: 15,
-    shadowColor: "#0F172A",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.28,
     shadowRadius: 16,
@@ -89,8 +91,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 3,
-    borderColor: "#FFFFFF",
-    backgroundColor: "#FFFFFF",
+    borderColor: theme.color.border,
+    backgroundColor: theme.color.bgCard,
   },
   fabMainPressed: {
     opacity: 0.92,
@@ -110,7 +112,7 @@ const styles = StyleSheet.create({
     width: 10,
     height: 2.5,
     borderRadius: 2,
-    backgroundColor: "#334155",
+    backgroundColor: theme.color.bgRaised,
     top: 4,
   },
   chevronArmLeft: {

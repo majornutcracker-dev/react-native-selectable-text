@@ -17,6 +17,8 @@ import {
   type HighlighterAsset,
 } from "@/constants/highlighters";
 
+import { theme } from "@/constants/theme";
+
 type NotesBottomSheetProps = {
   visible: boolean;
   highlight: HighlightData | null;
@@ -34,15 +36,11 @@ function formatHighlightText(text: string): string {
 
 function HighlightHandle(props: { asset: HighlighterAsset | undefined }) {
   const isImage = props.asset?.type === "background-image" && props.asset.image;
-  const color =
-    props.asset && isColorHighlighterType(props.asset.type)
-      ? (props.asset.color ?? "#ffffff")
-      : "#ffffff";
-  const handleBarColor = isImage
-    ? "#ffffff"
-    : color === "#ffffff"
-      ? "#000000"
-      : "#ffffff";
+  // Every highlighter now reports a representative colour — gradient-backed
+  // ones included — so the handle no longer needs a contrast special case:
+  // all four swatches are light, so the bar is always the dark on-accent ink.
+  const color = props.asset?.color ?? theme.color.textFaint;
+  const handleBarColor = theme.color.onAccent;
 
   return (
     <View
@@ -173,7 +171,7 @@ export function NotesBottomSheet({
             <TextInput
               style={styles.noteInput}
               placeholder="Write a note for this highlight..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={theme.color.textFaint}
               multiline
               textAlignVertical="top"
             />
@@ -231,10 +229,10 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     flex: 1,
-    backgroundColor: "#000000",
+    backgroundColor: theme.color.scrim,
   },
   sheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.color.bgCard,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     overflow: "hidden",
@@ -264,20 +262,20 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#64748B",
+    color: theme.color.textFaint,
     textTransform: "uppercase",
     letterSpacing: 0.4,
     marginTop: 4,
   },
   metaValue: {
     fontSize: 14,
-    color: "#0F172A",
+    color: theme.color.text,
     fontVariant: ["tabular-nums"],
   },
   highlightText: {
     fontSize: 15,
     lineHeight: 22,
-    color: "#1E293B",
+    color: theme.color.textMuted,
   },
   noteInput: {
     minHeight: 120,
@@ -285,12 +283,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderWidth: 1,
-    borderColor: "#E2E8F0",
+    borderColor: theme.color.border,
     borderRadius: 12,
     fontSize: 15,
     lineHeight: 22,
-    color: "#0F172A",
-    backgroundColor: "#F8FAFC",
+    color: theme.color.text,
+    backgroundColor: theme.color.bgElevated,
   },
   actionsRow: {
     flexDirection: "row",
@@ -309,18 +307,18 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   focusButton: {
-    backgroundColor: "#0F172A",
-    borderColor: "#0F172A",
+    backgroundColor: theme.color.accent,
+    borderColor: theme.color.border,
   },
   focusButtonText: {
-    color: "#FFFFFF",
+    color: theme.color.text,
   },
   unhighlightButton: {
-    backgroundColor: "#FFFFFF",
-    borderColor: "#E2E8F0",
+    backgroundColor: theme.color.bgCard,
+    borderColor: theme.color.border,
   },
   unhighlightButtonText: {
-    color: "#DC2626",
+    color: theme.color.danger,
   },
   actionButtonText: {
     fontSize: 15,
