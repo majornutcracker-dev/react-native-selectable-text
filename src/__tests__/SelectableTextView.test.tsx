@@ -222,6 +222,25 @@ describe("ref methods post the right messages", () => {
     });
   });
 
+  it("unhighlightSelection forwards the staged-removal options", () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+    act(() =>
+      ref.current!.unhighlightSelection({
+        keepSelection: true,
+        className: "highlight-exit",
+        delay: 400,
+      })
+    );
+    expect(lastPosted()).toEqual({
+      type: BridgingNames.functions.unhighlightSelection,
+      value: {
+        keepSelection: true,
+        options: { className: "highlight-exit", delay: 400 },
+      },
+    });
+  });
+
   it("unhighlightById forwards the staged-removal options", () => {
     const ref = renderComponent();
     mockPostMessage.mockClear();
@@ -428,7 +447,7 @@ describe("selection handling", () => {
     act(() => ref.current!.unhighlightSelection({ keepSelection: true }));
     expect(lastPosted()).toEqual({
       type: BridgingNames.functions.unhighlightSelection,
-      value: { keepSelection: true },
+      value: { keepSelection: true, options: {} },
     });
   });
 

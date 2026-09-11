@@ -170,7 +170,9 @@ export type SelectableTextViewOptions = {
 };
 
 /**
- * Options for {@link SelectableTextViewRef.unhighlightById}.
+ * Options shared by the methods that remove highlights one at a time:
+ * {@link SelectableTextViewRef.unhighlightById} and
+ * {@link SelectableTextViewRef.unhighlightSelection}.
  */
 export type UnhighlightOptions = {
   /**
@@ -279,9 +281,14 @@ export type SelectableTextViewRef = {
   ) => Promise<void>;
   /**
    * A function that removes the highlighting from the current selection
-   * @param options See {@link SelectionActionOptions}.
+   * @param options See {@link SelectionActionOptions} and {@link UnhighlightOptions}.
+   * With a `delay`, the affected highlights are resolved immediately and the
+   * selection is dropped right away, so the exit animation is not hidden behind
+   * the platform's selection UI.
    */
-  unhighlightSelection: (options?: SelectionActionOptions) => void;
+  unhighlightSelection: (
+    options?: SelectionActionOptions & UnhighlightOptions
+  ) => void;
   /**
    * A function that removes all the highlights
    */

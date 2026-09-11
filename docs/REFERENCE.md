@@ -63,22 +63,39 @@ storage, a different document, or `""` to clear.
 
 - **`highlightSelection(name?, options?)`** — applies a highlighter to the cached selection.
 - **`highlightSelectionWithValidation(validation, name?, options?)`** — highlights only if `validation(text)` returns, or resolves to, `true`.
-- **`unhighlightSelection(options?)`** — removes the highlight from the cached selection.
-- **`unhighlightById(id, options?)`** — removes a single highlight. Pass `{ className, delay }` to play an exit animation first: the class is added, the wait happens inside the WebView, and the node is deleted when it ends.
+- **`unhighlightSelection(options?)`** — removes the highlights the cached selection touches.
+- **`unhighlightById(id, options?)`** — removes a single highlight.
+- **`clearHighlights()`** — removes every highlight from the content, immediately.
+
+#### `UnhighlightOptions`
+
+`unhighlightById` and `unhighlightSelection` take `{ className?, delay? }`, which
+plays an exit animation before the highlight goes: the class is added, the wait
+happens inside the WebView, and the nodes are deleted when it ends.
 
 ```tsx
 // css: .highlight-exit { animation: fadeOut 400ms forwards; }
 ref.current?.unhighlightById(id, { className: "highlight-exit", delay: 400 });
+ref.current?.unhighlightSelection({ className: "highlight-exit", delay: 400 });
 ```
 
-There is no timer to cancel on unmount. A highlight already staged for removal
-is left alone rather than restarted, and one that disappears during the wait —
-a `clearHighlights()`, a restore — is not reported as an error.
+There is no timer to cancel on unmount. Highlights already staged for removal
+are left alone rather than restarted, so their animations keep their original
+schedule, and one that disappears during the wait — a `clearHighlights()`, a
+restore — is not reported as an error.
 
 The class is taken back off in the same tick as the removal, so `forwards` is
 safe to use and the animation's end state is never stranded on the text.
 
-- **`clearHighlights()`** — removes every highlight from the content.
+`unhighlightSelection` resolves which highlights the selection touches
+**immediately** and drops the selection right away, so the animation is not left
+behind the platform's selection UI; what gets removed when the wait ends is that
+set, not whatever happens to be selected by then.
+
+Note that anything which replaces the whole highlight set — `clearHighlights()`,
+or a new value on the `highlights` prop — cancels a running exit animation and
+removes the highlights at once. State that resets eagerly on its own will
+therefore outrun an animation you staged.
 
 #### `SelectionActionOptions`
 

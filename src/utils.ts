@@ -576,7 +576,7 @@ export const htmlContent = ({
             value?.keepSelection === true
           );
         } else if (type === BridgingNames.functions.unhighlightSelection) {
-          unhighlightSelection(value?.keepSelection === true); // { keepSelection }
+          unhighlightSelection(value?.keepSelection === true, value?.options); // { keepSelection, options }
         } else if (type === BridgingNames.functions.clearHighlights) {
           clearHighlights();
         } else if (type === BridgingNames.functions.focusHighlight) {
@@ -814,7 +814,7 @@ export const htmlContent = ({
       }
 
       // @sdk-internal-with-event
-      function unhighlightSelection(keepSelection) {
+      function unhighlightSelection(keepSelection, options) {
         try {
           if (!__MNST__.selector.cache.range) {
             sendOnError(
@@ -836,11 +836,17 @@ export const htmlContent = ({
             );
             return;
           }
-          clearHighlightFocusStyle();
-          flushPendingExitClasses();
-          __MNST__.highlighter.unhighlightSelection();
-          clearIgnoredElementsBackgroundColors();
-          sendOnHighlightChange(__MNST__.highlighter.serialize());
+          // Resolved now, not after the wait: the selection is about to be
+          // dropped, and by then it could point somewhere else entirely.
+          const affected = __MNST__.highlighter.getHighlightsInSelection();
+          stageRemoval(affected, options, function (className) {
+            removeHighlightsNow(
+              affected,
+              className,
+              "failed_to_unhighlight_selection",
+              "Failed to unhighlight selection"
+            );
+          });
           if (!keepSelection) {
             clearDomSelection();
           }
@@ -907,9 +913,6 @@ export const htmlContent = ({
 
       // @sdk-internal-with-event
       function unhighlightById(id, options) {
-        const opts = options || {};
-        const delay =
-          typeof opts.delay === "number" && opts.delay > 0 ? opts.delay : 0;
         try {
           const highlight = findHighlightById(id);
           if (!highlight) {
@@ -920,28 +923,14 @@ export const htmlContent = ({
             );
             return;
           }
-          if (!delay) {
-            removeHighlightNow(id, false);
-            return;
-          }
-          // Already staged: keep the running animation rather than restarting it.
-          if (__MNST__.state.pendingRemovals[id]) {
-            return;
-          }
-          if (opts.className) {
-            // Deliberately not tracked as a focus style: a focusHighlight() call
-            // in the meantime clears those, killing the exit animation.
-            setExitClass(highlight, opts.className, true);
-          }
-          __MNST__.state.pendingRemovals[id] = {
-            className: opts.className,
-            timer: setTimeout(function () {
-              delete __MNST__.state.pendingRemovals[id];
-              // The highlight may be gone by now (clearHighlights, a restore),
-              // which is not an error: the caller got what it asked for.
-              removeHighlightNow(id, true, opts.className);
-            }, delay),
-          };
+          stageRemoval([highlight], options, function (className) {
+            removeHighlightsNow(
+              [highlight],
+              className,
+              "failed_to_unhighlight_by_id",
+              "Failed to unhighlight by id"
+            );
+          });
         } catch (e) {
           sendOnError(
             "failed_to_unhighlight_by_id",
@@ -949,6 +938,53 @@ export const htmlContent = ({
             e?.message ?? String(e)
           );
         }
+      }
+
+      /**
+       * Runs a removal now, or after an exit animation when "delay" is set.
+       *
+       * The wait lives here rather than in React Native so there is no timer to
+       * cancel on unmount, and so a bulk removal in the meantime can take the
+       * class back off (see flushPendingExitClasses).
+       *
+       * @sdk-internal
+       */
+      function stageRemoval(highlights, options, remove) {
+        const opts = options || {};
+        const delay =
+          typeof opts.delay === "number" && opts.delay > 0 ? opts.delay : 0;
+        const className = opts.className;
+        if (!delay || highlights.length === 0) {
+          remove(className);
+          return;
+        }
+        const pending = __MNST__.state.pendingRemovals;
+        // Already staged: keep the running animation rather than restarting it.
+        const fresh = highlights.filter(function (highlight) {
+          return !pending[String(highlight.id)];
+        });
+        if (fresh.length === 0) {
+          return;
+        }
+        if (className) {
+          // Deliberately not tracked as a focus style: a focusHighlight() call
+          // in the meantime clears those, killing the exit animation.
+          fresh.forEach(function (highlight) {
+            setExitClass(highlight, className, true);
+          });
+        }
+        const timer = setTimeout(function () {
+          fresh.forEach(function (highlight) {
+            delete pending[String(highlight.id)];
+          });
+          remove(className);
+        }, delay);
+        fresh.forEach(function (highlight) {
+          pending[String(highlight.id)] = {
+            className: className,
+            timer: timer,
+          };
+        });
       }
 
       // @sdk-internal
@@ -993,31 +1029,18 @@ export const htmlContent = ({
       }
 
       // @sdk-internal-with-event
-      function removeHighlightNow(id, silentIfMissing, exitClassName) {
+      function removeHighlightsNow(highlights, exitClassName, code, message) {
         try {
-          const highlight = findHighlightById(id);
-          if (!highlight) {
-            if (!silentIfMissing) {
-              sendOnError(
-                "highlight_not_found",
-                "Highlight not found",
-                "No highlight registered for id: " + String(id)
-              );
-            }
-            return;
-          }
           clearHighlightFocusStyle();
           // Same tick as the removal, so the restored styles are never painted.
-          setExitClass(highlight, exitClassName, false);
-          __MNST__.highlighter.removeHighlights([highlight]);
+          highlights.forEach(function (highlight) {
+            setExitClass(highlight, exitClassName, false);
+          });
+          __MNST__.highlighter.removeHighlights(highlights);
           clearIgnoredElementsBackgroundColors();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
-          sendOnError(
-            "failed_to_unhighlight_by_id",
-            "Failed to unhighlight by id",
-            e?.message ?? String(e)
-          );
+          sendOnError(code, message, e?.message ?? String(e));
         }
       }
 

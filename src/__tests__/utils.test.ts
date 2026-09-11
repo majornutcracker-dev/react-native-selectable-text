@@ -658,6 +658,92 @@ describe("staged removal", () => {
     };
   }
 
+  function loadStageRemoval(MNST: Record<string, unknown>) {
+    const source = [
+      injectedFunctionSource("setExitClass"),
+      injectedFunctionSource("stageRemoval"),
+    ].join("\n");
+    return new Function("__MNST__", `${source}; return stageRemoval;`)(
+      MNST
+    ) as (
+      highlights: unknown[],
+      options: Record<string, unknown> | undefined,
+      remove: (className?: string) => void
+    ) => void;
+  }
+
+  const highlightOf = (id: string, el: ReturnType<typeof fakeElement>) => ({
+    id,
+    getHighlightElements: () => [el],
+  });
+
+  it("removes straight away when no delay is given", () => {
+    const stageRemoval = loadStageRemoval({ state: { pendingRemovals: {} } });
+    const remove = jest.fn();
+    stageRemoval([highlightOf("h1", fakeElement(["yh"]))], {}, remove);
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes straight away when there is nothing to animate", () => {
+    const stageRemoval = loadStageRemoval({ state: { pendingRemovals: {} } });
+    const remove = jest.fn();
+    // An empty selection still has to emit its change event.
+    stageRemoval([], { className: "x", delay: 400 }, remove);
+    expect(remove).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks every highlight of a batch, then removes them together", () => {
+    jest.useFakeTimers();
+    try {
+      const pendingRemovals: Record<string, unknown> = {};
+      const stageRemoval = loadStageRemoval({ state: { pendingRemovals } });
+      const first = fakeElement(["yh"]);
+      const second = fakeElement(["yh"]);
+      const remove = jest.fn();
+
+      stageRemoval(
+        [highlightOf("h1", first), highlightOf("h2", second)],
+        { className: "highlight-exit", delay: 400 },
+        remove
+      );
+
+      expect([...first.set]).toContain("highlight-exit");
+      expect([...second.set]).toContain("highlight-exit");
+      expect(remove).not.toHaveBeenCalled();
+      expect(Object.keys(pendingRemovals)).toEqual(["h1", "h2"]);
+
+      jest.advanceTimersByTime(400);
+
+      expect(remove).toHaveBeenCalledTimes(1);
+      expect(Object.keys(pendingRemovals)).toEqual([]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("leaves a running exit animation alone instead of restarting it", () => {
+    jest.useFakeTimers();
+    try {
+      const pendingRemovals: Record<string, unknown> = {};
+      const stageRemoval = loadStageRemoval({ state: { pendingRemovals } });
+      const el = fakeElement(["yh"]);
+      const highlight = highlightOf("h1", el);
+      const remove = jest.fn();
+
+      const opts = { className: "highlight-exit", delay: 400 };
+      stageRemoval([highlight], opts, remove);
+      jest.advanceTimersByTime(200);
+      stageRemoval([highlight], opts, remove);
+
+      // The second call is a no-op, so the removal still lands on the original
+      // schedule rather than being pushed out by another full delay.
+      jest.advanceTimersByTime(200);
+      expect(remove).toHaveBeenCalledTimes(1);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("takes the exit class off before Rangy removes the highlight", () => {
     // Rangy only unwraps the span when its class list is exactly the highlighter
     // class. With the exit class still on, it keeps the element and strips only
@@ -678,27 +764,30 @@ describe("staged removal", () => {
 
     const source = [
       injectedFunctionSource("setExitClass"),
-      injectedFunctionSource("removeHighlightNow"),
+      injectedFunctionSource("removeHighlightsNow"),
     ].join("\n");
 
-    const removeHighlightNow = new Function(
+    const removeHighlightsNow = new Function(
       "__MNST__",
-      "findHighlightById",
       "clearHighlightFocusStyle",
       "clearIgnoredElementsBackgroundColors",
       "sendOnHighlightChange",
       "sendOnError",
-      `${source}; return removeHighlightNow;`
+      `${source}; return removeHighlightsNow;`
     )(
       MNST,
-      () => highlight,
       () => {},
       () => {},
       () => {},
       () => {}
-    ) as (id: string, silent: boolean, className?: string) => void;
+    ) as (
+      highlights: unknown[],
+      className?: string,
+      code?: string,
+      message?: string
+    ) => void;
 
-    removeHighlightNow("h1", false, "highlight-exit");
+    removeHighlightsNow([highlight], "highlight-exit", "code", "message");
 
     expect(classesAtRemoval).toEqual(["yh"]);
   });

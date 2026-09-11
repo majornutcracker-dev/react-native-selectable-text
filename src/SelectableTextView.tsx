@@ -301,10 +301,15 @@ const SelectableTextView = React.forwardRef<
     }
   };
 
-  const unhighlightSelection = (options?: SelectionActionOptions) => {
+  const unhighlightSelection = (
+    options?: SelectionActionOptions & UnhighlightOptions
+  ) => {
     _postMessage({
       type: BridgingNames.functions.unhighlightSelection,
-      value: { keepSelection: options?.keepSelection === true },
+      value: {
+        keepSelection: options?.keepSelection === true,
+        options: { className: options?.className, delay: options?.delay },
+      },
     });
   };
 
