@@ -9,7 +9,7 @@
     "prebuild": "expo prebuild"
   },
   "dependencies": {
-    "@expo/metro-runtime": "~57.0.0",
+    "@expo/metro-runtime": "~57.0.15",
     "@react-native-clipboard/clipboard": "^1.16.3",
     "expo": "~57.0.0",
     "expo-constants": "~57.0.0",
