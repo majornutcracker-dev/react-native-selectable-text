@@ -13,7 +13,6 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   assetForClassName,
-  isColorHighlighterType,
   type HighlighterAsset,
 } from "@/constants/highlighters";
 

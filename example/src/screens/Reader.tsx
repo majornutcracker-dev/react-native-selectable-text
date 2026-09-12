@@ -3,6 +3,7 @@ import {
   SelectableTextViewRef,
   HighlighterName,
   HighlightData,
+  PressedHighlightData,
 } from "@majornutcracker/react-native-selectable-text";
 import { useCallback, useRef, useState } from "react";
 import {
@@ -21,6 +22,7 @@ import Clipboard from "@react-native-clipboard/clipboard";
 import { ActionsFab } from "@/components/ActionsFab";
 import { BottomSheetFab } from "@/components/BottomSheetFab";
 import { HighlighterFab } from "@/components/HighlighterFab";
+import { HighlightMenu } from "@/components/HighlightMenu";
 import { NotesBottomSheet } from "@/components/NotesBottomSheet";
 import { useToastNotification } from "@/context/ToastNotificationProvider";
 import { useHighlights } from "@/context/HighlightsProvider";
@@ -45,6 +47,16 @@ export default function Reader(props: { documentId: string }) {
   const [visibleNote, setVisibleNote] = useState(false);
   const [pressedHighlight, setPressedHighlight] =
     useState<HighlightData | null>(null);
+  // The tapped highlight and where it sits, so the menu can anchor to it.
+  const [menuHighlight, setMenuHighlight] =
+    useState<PressedHighlightData | null>(null);
+  // The WebView's own box: the frame onHighlightPressed reports against.
+  const [contentBounds, setContentBounds] = useState({ width: 0, height: 0 });
+
+  const closeMenu = useCallback(() => {
+    viewRef.current?.unfocusHighlight();
+    setMenuHighlight(null);
+  }, []);
 
   const count = states[doc.id]?.items.length ?? 0;
 
@@ -82,77 +94,99 @@ export default function Reader(props: { documentId: string }) {
         </View>
       </View>
 
-      <SelectableTextView
-        ref={viewRef}
-        webViewProps={{
-          style: styles.webview,
-          menuItems: [
-            { key: "highlight", label: "Highlight" },
-            { key: "highlight-validated", label: "Highlight (4+ chars)" },
-            { key: "unhighlight", label: "Unhighlight" },
-            { key: "copy", label: "Copy" },
-          ],
-          onCustomMenuSelection: (event) => {
-            const key = event.nativeEvent.key;
-            if (key === "highlight") {
-              // The selection is dropped by default, which dismisses the iOS
-              // callout so the entrance animation is actually visible.
-              viewRef.current?.highlightSelection(currentHighlighterName);
-            } else if (key === "highlight-validated") {
-              viewRef.current?.highlightSelectionWithValidation((text) => {
-                const valid = text.trim().length >= 4;
-                if (!valid) {
-                  showToast("Selection too short to highlight (min 4 chars)");
+      <View
+        style={styles.content}
+        onLayout={(event) => setContentBounds(event.nativeEvent.layout)}
+      >
+        <SelectableTextView
+          ref={viewRef}
+          webViewProps={{
+            style: styles.webview,
+            menuItems: [
+              { key: "highlight", label: "Highlight" },
+              { key: "highlight-validated", label: "Highlight (4+ chars)" },
+              { key: "unhighlight", label: "Unhighlight" },
+              { key: "copy", label: "Copy" },
+            ],
+            onCustomMenuSelection: (event) => {
+              const key = event.nativeEvent.key;
+              if (key === "highlight") {
+                // The selection is dropped by default, which dismisses the iOS
+                // callout so the entrance animation is actually visible.
+                viewRef.current?.highlightSelection(currentHighlighterName);
+              } else if (key === "highlight-validated") {
+                viewRef.current?.highlightSelectionWithValidation((text) => {
+                  const valid = text.trim().length >= 4;
+                  if (!valid) {
+                    showToast("Selection too short to highlight (min 4 chars)");
+                  }
+                  return valid;
+                }, currentHighlighterName);
+              } else if (key === "unhighlight") {
+                viewRef.current?.unhighlightSelection({
+                  className: HIGHLIGHT_EXIT_CLASS,
+                  delay: HIGHLIGHT_EXIT_MS,
+                });
+              } else if (key === "copy") {
+                Clipboard.setString(event.nativeEvent.selectedText);
+                if (Platform.OS === "ios") {
+                  Alert.alert("Copied to clipboard");
                 }
-                return valid;
-              }, currentHighlighterName);
-            } else if (key === "unhighlight") {
-              // No id is available for a raw selection, so this one is instant.
-              viewRef.current?.unhighlightSelection();
-            } else if (key === "copy") {
-              Clipboard.setString(event.nativeEvent.selectedText);
-              if (Platform.OS === "ios") {
-                Alert.alert("Copied to clipboard");
               }
-            }
-          },
-        }}
-        highlighters={highlighters}
-        content={doc.content}
-        css={doc.css}
-        fonts={doc.fonts}
-        highlights={states[doc.id]?.serialized ?? ""}
-        highlighterOptions={{
-          ignoredElements: [
-            "a",
-            "sup",
-            "sub",
-            ".ignored",
-            ".kicker",
-            ".tag",
-            ".byline",
-            "h1",
-            "h2",
-            "h3",
-            "figcaption",
-          ],
-        }}
-        options={{ userScalable: false, initialScale: 1, maximumScale: 1 }}
-        onLink={(url) => Linking.openURL(url)}
-        onHighlightsChange={(serialized, items) => {
-          setSerialized(doc.id, serialized);
-          setItems(doc.id, items);
-        }}
-        onError={(error) => showToast(error.message)}
-        onHighlightPressed={(highlight) => {
-          setPressedHighlight(highlight);
-          setVisibleNote(true);
-          return HIGHLIGHT_FOCUS_CLASS;
-        }}
-        onHighlightsVisibilityStateChange={(visible) => {
-          showToast(visible ? "Highlights visible" : "Highlights hidden");
-        }}
-      />
+            },
+          }}
+          highlighters={highlighters}
+          content={doc.content}
+          css={doc.css}
+          fonts={doc.fonts}
+          highlights={states[doc.id]?.serialized ?? ""}
+          highlighterOptions={{
+            ignoredElements: [
+              "a",
+              "sup",
+              "sub",
+              ".ignored",
+              ".kicker",
+              ".tag",
+              ".byline",
+              "h1",
+              "h2",
+              "h3",
+              "figcaption",
+            ],
+          }}
+          options={{ userScalable: false, initialScale: 1, maximumScale: 1 }}
+          onLink={(url) => Linking.openURL(url)}
+          onHighlightsChange={(serialized, items) => {
+            setSerialized(doc.id, serialized);
+            setItems(doc.id, items);
+          }}
+          onError={(error) => showToast(error.message)}
+          onHighlightPressed={(highlight) => {
+            setPressedHighlight(highlight);
+            setMenuHighlight(highlight);
+            return HIGHLIGHT_FOCUS_CLASS;
+          }}
+          onHighlightsVisibilityStateChange={(visible) => {
+            showToast(visible ? "Highlights visible" : "Highlights hidden");
+          }}
+        />
+
+        <HighlightMenu
+          highlight={menuHighlight}
+          bounds={contentBounds}
+          onClose={closeMenu}
+          onFocus={(id) => {
+            setMenuHighlight(null);
+            viewRef.current?.focusHighlight(id, HIGHLIGHT_FOCUS_CLASS);
+          }}
+          onUnhighlight={(id) => {
+            setMenuHighlight(null);
+            setPressedHighlight(null);
+            removeHighlight(id);
+          }}
+        />
+      </View>
 
       <BottomSheetFab onPress={() => setVisibleNote(true)} />
       <ActionsFab
@@ -233,5 +267,6 @@ const styles = StyleSheet.create({
     fontSize: theme.font.size.sm,
     fontWeight: theme.font.weight.bold,
   },
+  content: { flex: 1 },
   webview: { flex: 1 },
 });

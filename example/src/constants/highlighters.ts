@@ -144,8 +144,13 @@ export const highlightMotionCss: CSSString = `
   animation: highlightExit ${HIGHLIGHT_EXIT_MS}ms cubic-bezier(.4,0,1,1) forwards;
 }
 @keyframes highlightExit {
-  0%   { opacity: 1; transform: scale(1); filter: blur(0); }
-  100% { opacity: 0; transform: scale(0); filter: blur(10px); }
+  0% {
+    background-color: ${amber.base}
+  }
+
+  100% {
+    background-color: transparent;
+  }
 }
 `;
 

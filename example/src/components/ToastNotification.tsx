@@ -186,5 +186,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
+    color: theme.color.text,
   },
 });
