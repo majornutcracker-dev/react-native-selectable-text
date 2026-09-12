@@ -24,11 +24,20 @@ updates:
           - "*-jest"
     ignore:
       # Expo/RN versions track the SDK and are bumped deliberately, not by bot.
+      # `ignore` wins over `groups`, which matters for jest-expo: it is versioned
+      # against the SDK (57.x), yet the testing group's "jest*" would otherwise
+      # carry it to 58 while `expo` stayed on 57.
       - dependency-name: expo
       - dependency-name: expo-module-scripts
+      - dependency-name: jest-expo
       - dependency-name: react
       - dependency-name: react-native
       - dependency-name: react-native-webview
+      # typescript-eslint refuses to load against TS 7.0, so a major here breaks
+      # `yarn lint` outright. Minors and patches within 6.x are still welcome.
+      # Track https://github.com/typescript-eslint/typescript-eslint/issues/10940
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   # The example app is a test bed; keep it on the SDK cadence, not Dependabot's.
   - package-ecosystem: npm
@@ -39,11 +48,19 @@ updates:
     commit-message:
       prefix: "chore"
     ignore:
+      # "expo*" only matches bare names: @expo/metro-runtime slipped past it and
+      # was bumped, which is exactly what this list exists to prevent. Scoped
+      # packages need their own pattern.
       - dependency-name: "expo*"
+      - dependency-name: "@expo/*"
       - dependency-name: react
       - dependency-name: react-dom
       - dependency-name: react-native
       - dependency-name: "react-native-*"
+      # The example typechecks the library's own source through a path alias, so
+      # both sides have to stay on the same compiler.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: github-actions
     directory: /

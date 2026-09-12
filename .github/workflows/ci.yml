@@ -41,6 +41,22 @@ jobs:
   android:
     name: Build Android (example)
     needs: checks
+    # Dependabot only ever touches this package's own toolchain here — linters,
+    # jest, typescript — none of which reach a Gradle or an Xcode build. Those
+    # PRs stop at `checks`, and everything else still gets the full treatment:
+    #
+    #   - a push to main, whoever merged it
+    #   - any human's PR, including one where a human took over a bot branch
+    #     (the actor becomes them on the next push)
+    #   - dependabot/github_actions/*, where the workflow itself is what changed
+    #     and the builds are the only thing that exercises it
+    #   - dependabot/npm_and_yarn/example/*, since the example app is what these
+    #     jobs compile
+    if: >-
+      github.event_name == 'push'
+      || github.actor != 'dependabot[bot]'
+      || !startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
+      || startsWith(github.head_ref, 'dependabot/npm_and_yarn/example/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -89,6 +105,22 @@ jobs:
   ios:
     name: Build iOS (example)
     needs: checks
+    # Dependabot only ever touches this package's own toolchain here — linters,
+    # jest, typescript — none of which reach a Gradle or an Xcode build. Those
+    # PRs stop at `checks`, and everything else still gets the full treatment:
+    #
+    #   - a push to main, whoever merged it
+    #   - any human's PR, including one where a human took over a bot branch
+    #     (the actor becomes them on the next push)
+    #   - dependabot/github_actions/*, where the workflow itself is what changed
+    #     and the builds are the only thing that exercises it
+    #   - dependabot/npm_and_yarn/example/*, since the example app is what these
+    #     jobs compile
+    if: >-
+      github.event_name == 'push'
+      || github.actor != 'dependabot[bot]'
+      || !startsWith(github.head_ref, 'dependabot/npm_and_yarn/')
+      || startsWith(github.head_ref, 'dependabot/npm_and_yarn/example/')
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v7
