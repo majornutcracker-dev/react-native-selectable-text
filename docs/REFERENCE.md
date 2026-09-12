@@ -298,22 +298,29 @@ or E = mc<sup>2</sup> sitting inside a sentence.
 Any CSS selector works, so `.ignored` on a wrapper element opts a whole block
 out of visible highlighting.
 
+A selection that merely crosses ignored content is highlighted around it. One
+that lies **entirely** inside it has nothing left to show, so no highlight is
+kept — it is not counted, listed by `getAllHighlightsData()`, or serialized, and
+`onError` reports `highlight_fully_ignored` so you can tell the user why nothing
+happened.
+
 ## Error codes
 
 `onError` receives a `SelectableTextViewError` with `{ code, message, details }`.
 The possible `code` values are:
 
-| Code                                                               | Meaning                                                             |
-| ------------------------------------------------------------------ | ------------------------------------------------------------------- |
-| `empty_selection`                                                  | A highlight was requested with no active selection.                 |
-| `overlapping_highlight`                                            | The selection overlaps an existing highlight.                       |
-| `highlight_not_found`                                              | No highlight matches the given id.                                  |
-| `invalid_range`, `invalid_class_applier`, `invalid_highlight`      | Rangy rejected the range, highlighter class, or highlight payload.  |
-| `initialization_error`, `bridge_message_error`                     | The WebView SDK failed to start, or a bridge message was malformed. |
-| `failed_to_highlight_selection`, `failed_to_unhighlight_selection` | The highlight or unhighlight operation failed.                      |
-| `failed_to_clear_highlights`, `failed_to_unhighlight_by_id`        | The removal operation failed.                                       |
-| `failed_to_focus_highlight`                                        | Focusing a highlight failed.                                        |
-| `unknown`                                                          | An error that does not match any of the above.                      |
+| Code                                                               | Meaning                                                                                                    |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `empty_selection`                                                  | A highlight was requested with no active selection.                                                        |
+| `overlapping_highlight`                                            | The selection overlaps an existing highlight.                                                              |
+| `highlight_not_found`                                              | No highlight matches the given id.                                                                         |
+| `highlight_fully_ignored`                                          | The selection lay entirely inside ignored content, so the highlight had no visible text and was discarded. |
+| `invalid_range`, `invalid_class_applier`, `invalid_highlight`      | Rangy rejected the range, highlighter class, or highlight payload.                                         |
+| `initialization_error`, `bridge_message_error`                     | The WebView SDK failed to start, or a bridge message was malformed.                                        |
+| `failed_to_highlight_selection`, `failed_to_unhighlight_selection` | The highlight or unhighlight operation failed.                                                             |
+| `failed_to_clear_highlights`, `failed_to_unhighlight_by_id`        | The removal operation failed.                                                                              |
+| `failed_to_focus_highlight`                                        | Focusing a highlight failed.                                                                               |
+| `unknown`                                                          | An error that does not match any of the above.                                                             |
 
 ## Security note
 

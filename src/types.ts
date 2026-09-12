@@ -239,6 +239,7 @@ export type SelectableTextViewErrorCode =
   | "failed_to_unhighlight_selection"
   | "failed_to_clear_highlights"
   | "highlight_not_found"
+  | "highlight_fully_ignored"
   | "failed_to_focus_highlight"
   | "failed_to_unhighlight_by_id";
 

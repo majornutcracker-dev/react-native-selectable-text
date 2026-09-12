@@ -733,7 +733,7 @@ export const htmlContent = ({
           if (highlights) {
             __MNST__.highlighter.deserialize(highlights);
           }
-          clearIgnoredElementsBackgroundColors();
+          reconcileIgnoredElements();
           applyHighlightVisibilityClass(false, true);
           sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
@@ -797,7 +797,7 @@ export const htmlContent = ({
                   ? !__MNST__.overlapping
                   : true,
             });
-            clearIgnoredElementsBackgroundColors();
+            reconcileIgnoredElements();
             applyHighlightVisibilityClass(false, true);
             sendOnHighlightChange(__MNST__.highlighter.serialize());
             if (!keepSelection) {
@@ -867,7 +867,7 @@ export const htmlContent = ({
           clearHighlightFocusStyle();
           flushPendingExitClasses();
           __MNST__.highlighter.removeAllHighlights();
-          clearIgnoredElementsBackgroundColors();
+          reconcileIgnoredElements();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
           sendOnError(
@@ -1037,7 +1037,7 @@ export const htmlContent = ({
             setExitClass(highlight, exitClassName, false);
           });
           __MNST__.highlighter.removeHighlights(highlights);
-          clearIgnoredElementsBackgroundColors();
+          reconcileIgnoredElements();
           sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
           sendOnError(code, message, e?.message ?? String(e));
@@ -1236,7 +1236,19 @@ export const htmlContent = ({
         return text;
       }
       
-      function clearIgnoredElementsBackgroundColors() {
+      /**
+       * Takes the visible highlight back off anything on the ignored list, then
+       * makes the highlighter's registry agree with what is left in the DOM.
+       *
+       * A selection landing entirely inside ignored content leaves a highlight
+       * with every one of its spans unwrapped: invisible, yet still registered,
+       * still counted, and still serialized into the payload that gets restored
+       * later. Those are dropped here and reported, so the caller can say why
+       * nothing happened.
+       *
+       * @sdk-internal
+       */
+      function reconcileIgnoredElements() {
         const ignoredSelector = ${toScriptLiteral(ignoredElementsString)}.trim();
         if (!ignoredSelector) {
           return [];
@@ -1262,7 +1274,34 @@ export const htmlContent = ({
           node.remove();
         });
 
+        dropFullyIgnoredHighlights();
+
         return nodes;
+      }
+
+      // @sdk-internal-with-event
+      function dropFullyIgnoredHighlights() {
+        const all = __MNST__.highlighter.highlights || [];
+        const kept = all.filter(function (highlight) {
+          try {
+            return highlight.getHighlightElements().length > 0;
+          } catch (e) {
+            // Unreadable range: keep it rather than silently losing a highlight.
+            return true;
+          }
+        });
+        if (kept.length === all.length) {
+          return;
+        }
+        const dropped = all.length - kept.length;
+        __MNST__.highlighter.highlights = kept;
+        sendOnError(
+          "highlight_fully_ignored",
+          "Nothing to highlight in the selection",
+          "The selection lies entirely inside elements excluded by " +
+            "highlighterOptions.ignoredElements, so " + String(dropped) +
+            " highlight(s) had no visible text and were discarded."
+        );
       }
 
       // @dev
