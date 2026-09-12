@@ -512,6 +512,9 @@ export const htmlContent = ({
             cache: {
               text: "",
               range: null,
+              // Bumped on every change, so an async caller can prove the
+              // selection it validated is still the one it is acting on.
+              version: 0,
             },
             getSelected: function () {
               let t;
@@ -570,10 +573,11 @@ export const htmlContent = ({
         if (type === BridgingNames.functions.updateHighlights) {
           updateHighlights(value); // highlights
         } else if (type === BridgingNames.functions.highlightSelection) {
-          // { name, keepSelection }
+          // { name, keepSelection, expectSelectionVersion }
           highlightSelection(
             value?.name ?? "yellow-highlighter",
-            value?.keepSelection === true
+            value?.keepSelection === true,
+            value?.expectSelectionVersion
           );
         } else if (type === BridgingNames.functions.unhighlightSelection) {
           unhighlightSelection(value?.keepSelection === true, value?.options); // { keepSelection, options }
@@ -737,6 +741,7 @@ export const htmlContent = ({
           success,
           text,
           error,
+          selectionVersion: __MNST__.selector.cache.version,
         });
       }
 
@@ -810,8 +815,23 @@ export const htmlContent = ({
       }
 
       // @sdk-internal-with-event
-      function highlightSelection(classApplierName, keepSelection) {
+      function highlightSelection(classApplierName, keepSelection, expectVersion) {
         try {
+          // An async validation runs while the reader can keep selecting. The
+          // caller pins the selection it approved, and anything else is refused
+          // rather than silently highlighting whatever is selected by now.
+          if (
+            expectVersion != null &&
+            expectVersion !== __MNST__.selector.cache.version
+          ) {
+            sendOnError(
+              "selection_changed",
+              "The selection changed before it was highlighted",
+              "Validated selection version " + String(expectVersion) +
+                ", current is " + String(__MNST__.selector.cache.version) + "."
+            );
+            return;
+          }
           const highlightNames = ${applierNames}
           if (!highlightNames.includes(classApplierName)) {
             sendOnError(
@@ -1229,6 +1249,7 @@ export const htmlContent = ({
         const hadText = __MNST__.selector.cache.text !== "";
         __MNST__.selector.cache.text = "";
         __MNST__.selector.cache.range = null;
+        __MNST__.selector.cache.version++;
         if (hadText) {
           sendOnTextSelectionChange("");
         }
@@ -1448,6 +1469,7 @@ export const htmlContent = ({
             const next = "";
             __MNST__.selector.cache.text = next;
             __MNST__.selector.cache.range = null;
+            __MNST__.selector.cache.version++;
             if (prev !== next) {
               sendOnTextSelectionChange(next);
             }
@@ -1458,6 +1480,7 @@ export const htmlContent = ({
             if (selection.rangeCount > 0) {
               __MNST__.selector.cache.range = selection.getRangeAt(0).cloneRange();
             }
+            __MNST__.selector.cache.version++;
             if (prev !== next) {
               sendOnTextSelectionChange(next);
             }

@@ -498,7 +498,84 @@ describe("selection handling", () => {
       });
       await pending;
     });
-    expect(lastPosted().value).toEqual({ name: "yh", keepSelection: true });
+    expect(lastPosted().value).toEqual({
+      name: "yh",
+      keepSelection: true,
+      expectSelectionVersion: undefined,
+    });
+  });
+
+  it("pins the selection it validated, not the one selected by then", async () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+    await act(async () => {
+      const pending = ref.current!.highlightSelectionWithValidation(
+        () => true,
+        "yh"
+      );
+      const posted = lastPosted();
+      await fireMessage(BridgingNames.promises.getSelectedText, {
+        success: true,
+        promiseId: posted.value,
+        text: "hello",
+        selectionVersion: 7,
+      });
+      await pending;
+    });
+    // The WebView refuses the highlight if the selection moved on since.
+    expect(lastPosted().value).toMatchObject({ expectSelectionVersion: 7 });
+  });
+
+  it("reports a failed validation round-trip instead of rejecting", async () => {
+    const onError = jest.fn();
+    const ref = renderComponent({ onError });
+    mockPostMessage.mockClear();
+
+    // No call site catches this; an unhandled rejection would surface as a
+    // red box rather than something the app can show.
+    await act(async () => {
+      const pending = ref.current!.highlightSelectionWithValidation(
+        () => true,
+        "yh"
+      );
+      const posted = lastPosted();
+      await fireMessage(BridgingNames.promises.getSelectedText, {
+        success: false,
+        promiseId: posted.value,
+        error: "boom",
+      });
+      await expect(pending).resolves.toBeUndefined();
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        code: "failed_to_highlight_selection",
+        details: "boom",
+      })
+    );
+  });
+
+  it("reports a throwing validation instead of rejecting", async () => {
+    const onError = jest.fn();
+    const ref = renderComponent({ onError });
+    mockPostMessage.mockClear();
+
+    await act(async () => {
+      const pending = ref.current!.highlightSelectionWithValidation(() => {
+        throw new Error("validation exploded");
+      }, "yh");
+      const posted = lastPosted();
+      await fireMessage(BridgingNames.promises.getSelectedText, {
+        success: true,
+        promiseId: posted.value,
+        text: "hello",
+      });
+      await expect(pending).resolves.toBeUndefined();
+    });
+
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({ details: "validation exploded" })
+    );
   });
 });
 

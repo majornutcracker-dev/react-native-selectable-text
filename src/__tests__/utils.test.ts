@@ -870,3 +870,62 @@ describe("highlight geometry", () => {
     expect(unionRect([])).toEqual({ x: 0, y: 0, width: 0, height: 0 });
   });
 });
+
+describe("selection pinning", () => {
+  /**
+   * highlightSelection is only reached through the bridge, so it is pulled out
+   * of the injected script and run against a fake selection cache.
+   */
+  function loadHighlightSelection(version: number) {
+    const source = injectedFunctionSource("highlightSelection");
+    const sendOnError = jest.fn();
+    const highlightSelection = new Function(
+      "__MNST__",
+      "sendOnError",
+      "document",
+      `${source}; return highlightSelection;`
+    )(
+      { selector: { cache: { version, range: null, text: "" } } },
+      sendOnError,
+      { getSelection: () => null }
+    ) as (name: string, keep: boolean, expect?: number) => void;
+    return { highlightSelection, sendOnError };
+  }
+
+  it("refuses a selection that moved while validation was running", () => {
+    const { highlightSelection, sendOnError } = loadHighlightSelection(7);
+
+    highlightSelection("yh", false, 4);
+
+    expect(sendOnError).toHaveBeenCalledWith(
+      "selection_changed",
+      expect.any(String),
+      expect.stringContaining("7")
+    );
+  });
+
+  it("gets past the check when the selection is the validated one", () => {
+    const { highlightSelection, sendOnError } = loadHighlightSelection(7);
+
+    // Reaches the range check further down, which is a different complaint.
+    highlightSelection("yh", false, 7);
+
+    expect(sendOnError).not.toHaveBeenCalledWith(
+      "selection_changed",
+      expect.anything(),
+      expect.anything()
+    );
+  });
+
+  it("skips the check entirely for a direct call", () => {
+    const { highlightSelection, sendOnError } = loadHighlightSelection(7);
+
+    highlightSelection("yh", false, undefined);
+
+    expect(sendOnError).not.toHaveBeenCalledWith(
+      "selection_changed",
+      expect.anything(),
+      expect.anything()
+    );
+  });
+});

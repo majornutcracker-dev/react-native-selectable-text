@@ -18,6 +18,9 @@ import { generatePromiseId, htmlContent } from "./utils";
 import { Linking, Platform } from "react-native";
 import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTypes";
 
+/** How long a request to the WebView may go unanswered before it rejects. */
+const PROMISE_TIMEOUT_MS = 2000;
+
 export type SelectableTextViewProps = SelectableTextViewPropsBase & {
   webViewProps?: Omit<
     WebViewProps,
@@ -49,8 +52,24 @@ const SelectableTextView = React.forwardRef<
     [key: string]: {
       resolve: (value: any) => void;
       reject: (reason?: any) => void;
+      timer?: ReturnType<typeof setTimeout>;
     };
   }>({});
+
+  /**
+   * Forgets a pending request and cancels its timeout.
+   *
+   * The timer used to outlive the answer: harmless, since it checked the entry
+   * before firing, but it kept the closure alive for two seconds past every
+   * call and past unmount.
+   */
+  const settlePromise = (id: string) => {
+    const pending = promises.current[id];
+    if (pending?.timer) {
+      clearTimeout(pending.timer);
+    }
+    delete promises.current[id];
+  };
 
   const webviewRef = React.useRef<WebView>(null);
 
@@ -59,6 +78,10 @@ const SelectableTextView = React.forwardRef<
   const lastEmittedHighlights = React.useRef<Highlights | undefined>(
     highlights
   );
+
+  // Which selection the last getSelectedText() read, so an action decided on
+  // that text can refuse to land on a different one.
+  const lastSelectionVersion = React.useRef<number | undefined>(undefined);
 
   // Anything posted before the WebView document is ready is dropped on the
   // floor. Queue instead: a `highlights` change during the initial load would
@@ -115,13 +138,16 @@ const SelectableTextView = React.forwardRef<
           const text = data.value.text;
           const error = data.value.error;
           if (success) {
+            // Kept aside rather than resolved with the text: getSelectedText is
+            // public and resolves to a plain string.
+            lastSelectionVersion.current = data.value.selectionVersion;
             promises.current[id]?.resolve(text ?? "");
           } else {
             promises.current[id]?.reject(
               new Error(error ?? "Unknown error while getting selected text")
             );
           }
-          delete promises.current[id];
+          settlePromise(id);
         } else if (data.type === BridgingNames.promises.getHighlights) {
           const success = data.value.success;
           const id = data.value.promiseId;
@@ -134,7 +160,7 @@ const SelectableTextView = React.forwardRef<
               new Error(error ?? "Unknown error while getting highlights")
             );
           }
-          delete promises.current[id];
+          settlePromise(id);
         } else if (data.type === BridgingNames.promises.getAllHighlightsData) {
           const success = data.value.success;
           const id = data.value.promiseId;
@@ -149,7 +175,7 @@ const SelectableTextView = React.forwardRef<
               )
             );
           }
-          delete promises.current[id];
+          settlePromise(id);
         } else if (data.type === BridgingNames.events.log) {
           console.log("Log: ", data.value);
         } else if (data.type === BridgingNames.events.onError) {
@@ -190,7 +216,7 @@ const SelectableTextView = React.forwardRef<
               )
             );
           }
-          delete promises.current[id];
+          settlePromise(id);
         } else if (
           data.type === BridgingNames.promises.toggleHighlightsVisibility
         ) {
@@ -207,7 +233,7 @@ const SelectableTextView = React.forwardRef<
               )
             );
           }
-          delete promises.current[id];
+          settlePromise(id);
         } else if (
           data.type === BridgingNames.events.onHighlightsVisibilityStateChange
         ) {
@@ -277,20 +303,22 @@ const SelectableTextView = React.forwardRef<
     return () => {
       for (const key in promises.current) {
         promises.current[key]?.reject(new Error("Component unmounted"));
-        delete promises.current[key];
+        settlePromise(key);
       }
     };
   }, []);
 
   const highlightSelection = (
     highlighterName?: HighlighterName,
-    options?: SelectionActionOptions
+    options?: SelectionActionOptions,
+    expectSelectionVersion?: number
   ) => {
     _postMessage({
       type: BridgingNames.functions.highlightSelection,
       value: {
         name: highlighterName,
         keepSelection: options?.keepSelection === true,
+        expectSelectionVersion,
       },
     });
   };
@@ -300,10 +328,25 @@ const SelectableTextView = React.forwardRef<
     highlighterName?: HighlighterName,
     options?: SelectionActionOptions
   ) => {
-    const text = await getSelectedText();
-    const result = await validation(text);
-    if (result) {
-      highlightSelection(highlighterName, options);
+    try {
+      const text = await getSelectedText();
+      // Pinned before awaiting: validation may be slow, and the reader can keep
+      // selecting while it runs. The WebView refuses a stale one.
+      const selectionVersion = lastSelectionVersion.current;
+      const result = await validation(text);
+      if (result) {
+        highlightSelection(highlighterName, options, selectionVersion);
+      }
+    } catch (error) {
+      // This is a fire-and-forget action, and every call site would otherwise
+      // need its own catch to keep a timeout, an unmount, or a throwing
+      // validation from surfacing as an unhandled rejection.
+      onError?.({
+        name: "SelectableTextViewError",
+        code: "failed_to_highlight_selection",
+        message: "Failed to highlight the selection",
+        details: error instanceof Error ? error.message : String(error),
+      } as SelectableTextViewError);
     }
   };
 
@@ -366,12 +409,12 @@ const SelectableTextView = React.forwardRef<
         type: BridgingNames.promises.getSelectedText,
         value: id,
       });
-      setTimeout(() => {
+      promises.current[id].timer = setTimeout(() => {
         if (promises.current[id]) {
           promises.current[id]?.reject(new Error("Timeout"));
-          delete promises.current[id];
+          settlePromise(id);
         }
-      }, 2000); // 2 second timeout
+      }, PROMISE_TIMEOUT_MS);
     });
   };
 
@@ -386,12 +429,12 @@ const SelectableTextView = React.forwardRef<
         type: BridgingNames.promises.getHighlights,
         value: id,
       });
-      setTimeout(() => {
+      promises.current[id].timer = setTimeout(() => {
         if (promises.current[id]) {
           promises.current[id]?.reject(new Error("Timeout"));
-          delete promises.current[id];
+          settlePromise(id);
         }
-      }, 2000); // 2 second timeout
+      }, PROMISE_TIMEOUT_MS);
     });
   };
 
@@ -406,12 +449,12 @@ const SelectableTextView = React.forwardRef<
         type: BridgingNames.promises.getAllHighlightsData,
         value: id,
       });
-      setTimeout(() => {
+      promises.current[id].timer = setTimeout(() => {
         if (promises.current[id]) {
           promises.current[id]?.reject(new Error("Timeout"));
-          delete promises.current[id];
+          settlePromise(id);
         }
-      }, 2000); // 2 second timeout
+      }, PROMISE_TIMEOUT_MS);
     });
   };
 
@@ -426,12 +469,12 @@ const SelectableTextView = React.forwardRef<
         type: BridgingNames.promises.getHighlightsVisibilityState,
         value: id,
       });
-      setTimeout(() => {
+      promises.current[id].timer = setTimeout(() => {
         if (promises.current[id]) {
           promises.current[id]?.reject(new Error("Timeout"));
-          delete promises.current[id];
+          settlePromise(id);
         }
-      }, 2000); // 2 second timeout
+      }, PROMISE_TIMEOUT_MS);
     });
   };
 
@@ -446,12 +489,12 @@ const SelectableTextView = React.forwardRef<
         type: BridgingNames.promises.toggleHighlightsVisibility,
         value: id,
       });
-      setTimeout(() => {
+      promises.current[id].timer = setTimeout(() => {
         if (promises.current[id]) {
           promises.current[id]?.reject(new Error("Timeout"));
-          delete promises.current[id];
+          settlePromise(id);
         }
-      }, 2000); // 2 second timeout
+      }, PROMISE_TIMEOUT_MS);
     });
   };
 

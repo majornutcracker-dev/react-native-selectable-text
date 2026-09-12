@@ -105,6 +105,14 @@ storage, a different document, or `""` to clear.
 
 - **`highlightSelection(name?, options?)`** — applies a highlighter to the cached selection.
 - **`highlightSelectionWithValidation(validation, name?, options?)`** — highlights only if `validation(text)` returns, or resolves to, `true`.
+
+The selection is pinned when the text is read, so an async `validation` cannot
+end up highlighting whatever the reader selected while it was running: a
+selection that moved on is refused with `selection_changed`. The returned
+promise never rejects — a timeout, an unmount, or a `validation` that throws is
+reported through `onError` instead, so a call site does not need its own
+`catch`.
+
 - **`unhighlightSelection(options?)`** — removes the highlights the cached selection touches.
 - **`unhighlightById(id, options?)`** — removes a single highlight.
 - **`clearHighlights()`** — removes every highlight from the content, immediately.
@@ -326,6 +334,21 @@ the highlighter itself sets.
 The one exception is the hidden state used by `toggleHighlightsVisibility()`,
 which is marked `!important` and cannot be overridden.
 
+An exit class is **added to** the highlighter's class rather than replacing it,
+so the span carries both. A compound selector therefore outranks the
+highlighter's own rule, which is what lets each highlighter leave differently —
+releasing the property its type actually set — without any of it reaching the
+API:
+
+```css
+.amber-marker.highlight-exit {
+  animation: amberDrain 400ms forwards;
+}
+.mint-frame.highlight-exit {
+  animation: mintRelease 400ms forwards;
+}
+```
+
 Classes the SDK adds to a highlight — a focus style, a staged exit — are always
 removed before the highlight itself is, because a span left carrying an extra
 class cannot be unwrapped and would keep whatever that class styles.
@@ -362,6 +385,7 @@ The possible `code` values are:
 | `failed_to_highlight_selection`, `failed_to_unhighlight_selection` | The highlight or unhighlight operation failed.                                                             |
 | `failed_to_clear_highlights`, `failed_to_unhighlight_by_id`        | The removal operation failed.                                                                              |
 | `failed_to_focus_highlight`                                        | Focusing a highlight failed.                                                                               |
+| `selection_changed`                                                | The selection moved while an async validation ran, so the highlight was refused.                           |
 | `unknown`                                                          | An error that does not match any of the above.                                                             |
 
 ## Security note
