@@ -139,18 +139,58 @@ export const highlightMotionCss: CSSString = `
   100% { transform: scale(1); }
 }
 
+/*
+ * Exit animations, one per highlighter.
+ *
+ * A highlighter's own class carries its entrance animation, and the exit class
+ * is added alongside it — the span ends up as
+ * "highlight-amber-marker highlight-exit". A compound selector therefore
+ * outranks the highlighter's own rule and replaces the animation, which is what
+ * lets each type leave the way it arrived instead of sharing one generic fade.
+ *
+ * Each one releases the property its type actually set: fading a background out
+ * of an outline highlighter would animate a colour it never had, and the
+ * highlight would simply vanish at the end of the delay.
+ */
 .${HIGHLIGHT_EXIT_CLASS} {
-  display: inline-block;
-  animation: highlightExit ${HIGHLIGHT_EXIT_MS}ms cubic-bezier(.4,0,1,1) forwards;
+  animation: exitFade ${HIGHLIGHT_EXIT_MS}ms cubic-bezier(.4,0,1,1) forwards;
 }
-@keyframes highlightExit {
-  0% {
-    background-color: ${amber.base}
-  }
+@keyframes exitFade {
+  0%   { background-color: currentColor; }
+  100% { background-color: transparent; }
+}
 
-  100% {
-    background-color: transparent;
-  }
+.highlight-amber-marker.${HIGHLIGHT_EXIT_CLASS} {
+  animation: amberDrain ${HIGHLIGHT_EXIT_MS}ms cubic-bezier(.4,0,1,1) forwards;
+}
+@keyframes amberDrain {
+  0%   { background-color: ${amber.base}; box-shadow: 0 0 0 0 rgba(255,200,87,0); }
+  40%  { box-shadow: 0 0 0 4px rgba(255,200,87,.35); }
+  100% { background-color: transparent; box-shadow: 0 0 0 10px rgba(255,200,87,0); }
+}
+
+.highlight-coral-wave.${HIGHLIGHT_EXIT_CLASS} {
+  animation: coralErase ${HIGHLIGHT_EXIT_MS}ms cubic-bezier(.4,0,1,1) forwards;
+}
+@keyframes coralErase {
+  0%   { text-decoration-color: ${coral.base}; text-underline-offset: 5px; }
+  100% { text-decoration-color: transparent; text-underline-offset: 14px; }
+}
+
+.highlight-mint-frame.${HIGHLIGHT_EXIT_CLASS} {
+  animation: mintRelease ${HIGHLIGHT_EXIT_MS}ms cubic-bezier(.4,0,1,1) forwards;
+}
+@keyframes mintRelease {
+  0%   { outline-color: ${mint.base}; outline-offset: 3px; }
+  100% { outline-color: transparent; outline-offset: 14px; }
+}
+
+.highlight-azure-prism.${HIGHLIGHT_EXIT_CLASS} {
+  animation: azureWithdraw ${HIGHLIGHT_EXIT_MS}ms cubic-bezier(.4,0,1,1) forwards;
+}
+@keyframes azureWithdraw {
+  0%   { background-position: 50% 0; }
+  100% { background-position: 140% 0; }
 }
 `;
 

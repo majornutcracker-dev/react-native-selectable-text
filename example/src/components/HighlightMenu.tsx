@@ -20,6 +20,8 @@ type HighlightMenuProps = {
   bounds: { width: number; height: number };
   onClose: () => void;
   onFocus: (id: string) => void;
+  /** Hands the highlight to the notes sheet. Needs the whole thing, not the id. */
+  onAnnotate: (highlight: PressedHighlightData) => void;
   onUnhighlight: (id: string) => void;
 };
 
@@ -83,6 +85,7 @@ export function HighlightMenu({
   bounds,
   onClose,
   onFocus,
+  onAnnotate,
   onUnhighlight,
 }: HighlightMenuProps) {
   const [menuSize, setMenuSize] = useState({ width: 0, height: 0 });
@@ -158,6 +161,13 @@ export function HighlightMenu({
           <View style={styles.divider} />
           <Pressable
             style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+            onPress={() => onAnnotate(highlight)}
+          >
+            <Text style={styles.actionText}>Note</Text>
+          </Pressable>
+          <View style={styles.divider} />
+          <Pressable
+            style={({ pressed }) => [styles.action, pressed && styles.pressed]}
             onPress={() => onUnhighlight(highlight.id)}
           >
             <Text style={[styles.actionText, styles.dangerText]}>Remove</Text>
@@ -171,7 +181,10 @@ export function HighlightMenu({
 const styles = StyleSheet.create({
   menu: {
     position: "absolute",
-    maxWidth: 260,
+    // Wide enough that three actions never crowd, capped so a long excerpt in
+    // the header does not stretch the menu across the screen.
+    minWidth: 248,
+    maxWidth: 280,
     borderRadius: theme.radius.md,
     backgroundColor: theme.color.bgCard,
     borderWidth: 1,
@@ -208,7 +221,9 @@ const styles = StyleSheet.create({
     alignItems: "stretch",
   },
   action: {
-    paddingHorizontal: theme.space(4),
+    flex: 1,
+    alignItems: "center",
+    paddingHorizontal: theme.space(2),
     paddingVertical: theme.space(3),
   },
   pressed: {

@@ -2,8 +2,6 @@ import {
   SelectableTextView,
   SelectableTextViewRef,
   HighlighterName,
-  HighlightData,
-  PressedHighlightData,
 } from "@majornutcracker/react-native-selectable-text";
 import { useCallback, useRef, useState } from "react";
 import {
@@ -26,6 +24,7 @@ import { HighlightMenu } from "@/components/HighlightMenu";
 import { NotesBottomSheet } from "@/components/NotesBottomSheet";
 import { useToastNotification } from "@/context/ToastNotificationProvider";
 import { useHighlights } from "@/context/HighlightsProvider";
+import { useHighlightOverlay } from "@/hooks/useHighlightOverlay";
 import {
   HIGHLIGHT_EXIT_CLASS,
   HIGHLIGHT_EXIT_MS,
@@ -44,19 +43,22 @@ export default function Reader(props: { documentId: string }) {
 
   const [currentHighlighterName, setCurrentHighlighterName] =
     useState<HighlighterName>(highlighters[0].name);
-  const [visibleNote, setVisibleNote] = useState(false);
-  const [pressedHighlight, setPressedHighlight] =
-    useState<HighlightData | null>(null);
-  // The tapped highlight and where it sits, so the menu can anchor to it.
-  const [menuHighlight, setMenuHighlight] =
-    useState<PressedHighlightData | null>(null);
   // The WebView's own box: the frame onHighlightPressed reports against.
   const [contentBounds, setContentBounds] = useState({ width: 0, height: 0 });
+  const {
+    menuHighlight,
+    noteHighlight,
+    noteVisible,
+    showMenu,
+    showNote,
+    dismiss,
+  } = useHighlightOverlay();
 
-  const closeMenu = useCallback(() => {
+  /** Closing by hand also drops the focus style the press applied. */
+  const closeOverlay = useCallback(() => {
     viewRef.current?.unfocusHighlight();
-    setMenuHighlight(null);
-  }, []);
+    dismiss();
+  }, [dismiss]);
 
   const count = states[doc.id]?.items.length ?? 0;
 
@@ -163,8 +165,7 @@ export default function Reader(props: { documentId: string }) {
           }}
           onError={(error) => showToast(error.message)}
           onHighlightPressed={(highlight) => {
-            setPressedHighlight(highlight);
-            setMenuHighlight(highlight);
+            showMenu(highlight);
             return HIGHLIGHT_FOCUS_CLASS;
           }}
           onHighlightsVisibilityStateChange={(visible) => {
@@ -175,25 +176,26 @@ export default function Reader(props: { documentId: string }) {
         <HighlightMenu
           highlight={menuHighlight}
           bounds={contentBounds}
-          onClose={closeMenu}
+          onClose={closeOverlay}
           onFocus={(id) => {
-            setMenuHighlight(null);
+            dismiss();
             viewRef.current?.focusHighlight(id, HIGHLIGHT_FOCUS_CLASS);
           }}
+          // The focus style stays on, so the sheet is clearly about that one.
+          onAnnotate={(highlight) => showNote(highlight)}
           onUnhighlight={(id) => {
-            setMenuHighlight(null);
-            setPressedHighlight(null);
+            dismiss();
             removeHighlight(id);
           }}
         />
       </View>
 
-      <BottomSheetFab onPress={() => setVisibleNote(true)} />
+      <BottomSheetFab onPress={() => showNote(null)} />
       <ActionsFab
         selectableTextViewRef={viewRef}
         accent={doc.accent}
         onClearHighlights={() => {
-          setPressedHighlight(null);
+          dismiss();
           reset(doc.id);
         }}
       />
@@ -203,19 +205,15 @@ export default function Reader(props: { documentId: string }) {
         setCurrentHighlighterName={setCurrentHighlighterName}
       />
       <NotesBottomSheet
-        visible={visibleNote}
-        onClose={() => {
-          viewRef.current?.unfocusHighlight();
-          setVisibleNote(false);
-        }}
-        highlight={pressedHighlight}
+        visible={noteVisible}
+        onClose={closeOverlay}
+        highlight={noteHighlight}
         onFocusHighlight={(id) => {
-          setVisibleNote(false);
+          dismiss();
           viewRef.current?.focusHighlight(id, HIGHLIGHT_FOCUS_CLASS);
         }}
         onUnhighlight={(id) => {
-          setVisibleNote(false);
-          setPressedHighlight(null);
+          dismiss();
           removeHighlight(id);
         }}
       />
