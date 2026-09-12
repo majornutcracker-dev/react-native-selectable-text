@@ -28,11 +28,53 @@ This page is the full surface. For a quick start see the
 | `onHighlightsChange(highlights, items)`      | The serialized highlight payload changes. Receives the payload to persist, plus the `HighlightData[]` it contains — no `getAllHighlightsData()` round-trip needed.                   |
 | `onLink(url)`                                | A link is tapped. Without this prop, `http(s)` URLs open through `Linking`.                                                                                                          |
 | `onError(error)`                             | The WebView SDK reports an error: `{ code, message, details }`. Try highlighting over an existing highlight for `overlapping_highlight`, or with no selection for `empty_selection`. |
-| `onHighlightPressed(highlight)`              | A highlight is tapped. Receives `{ id, name, text }`. Return a `className` to style the pressed highlight (define it in `css`), or return nothing to leave it unstyled.              |
+| `onHighlightPressed(highlight)`              | A highlight is tapped. Receives `{ id, name, text, rect, rects }`. Return a `className` to style the pressed highlight (define it in `css`), or return nothing to leave it unstyled. |
 | `onHighlightsVisibilityStateChange(visible)` | Highlight visibility changes. Receives `true` when visible, `false` when hidden.                                                                                                     |
 
 A callback that throws is caught and logged rather than crashing the bridge, so
 a bug in your handler will not take the component down with it.
+
+### Where a tapped highlight is
+
+`onHighlightPressed` reports the geometry of the highlight along with it, so a
+popover can be anchored without measuring anything yourself:
+
+```tsx
+const [menu, setMenu] = useState<HighlightRect | null>(null);
+
+<View>
+  <SelectableTextView
+    onHighlightPressed={(highlight) => {
+      setMenu(highlight.rect);
+      return "focused";
+    }}
+    ...
+  />
+  {menu && (
+    <View
+      style={{
+        position: "absolute",
+        left: menu.x,
+        top: menu.y + menu.height, // just under the highlight
+      }}
+    >
+      ...
+    </View>
+  )}
+</View>;
+```
+
+`rect` is the box around the whole highlight; `rects` has one box per line it
+covers, for drawing something that has to follow the text rather than sit beside
+it. Both are in points from the top-left of the WebView — the same frame as the
+component's own layout, so they can be used directly on an overlay positioned
+over it. Zoom is already applied, so a pinched-in page reports where the text
+actually appears rather than where it sits in the layout.
+
+They are a **snapshot** taken when the tap happened. Scrolling or zooming
+afterwards does not update them, so dismiss or re-anchor whatever you placed:
+`onTextSelectionChange` and a `webViewProps.onScroll` handler are the usual
+hooks for that.
 
 ### Controlling the highlights
 

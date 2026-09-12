@@ -613,40 +613,40 @@ describe("stylesheet ordering", () => {
   });
 });
 
-describe("staged removal", () => {
-  /** Pulls one function's source out of the script injected into the WebView. */
-  function injectedFunctionSource(name: string): string {
-    const html = htmlContent({
-      hl: [
-        { name: "yh", options: { type: "background-color", color: "yellow" } },
-      ],
-      h: undefined,
-      c: "<p>hi</p>",
-      css: undefined,
-      f: undefined,
-      ho: undefined,
-      p: "ios",
-      o: { userScalable: true, initialScale: 1, maximumScale: 2.5 },
-    });
-    const blocks = html
-      .split("<script>")
-      .slice(1)
-      .map((block) => block.slice(0, block.indexOf("</script>")));
-    const script = blocks[blocks.length - 1];
+/** Pulls one function's source out of the script injected into the WebView. */
+function injectedFunctionSource(name: string): string {
+  const html = htmlContent({
+    hl: [
+      { name: "yh", options: { type: "background-color", color: "yellow" } },
+    ],
+    h: undefined,
+    c: "<p>hi</p>",
+    css: undefined,
+    f: undefined,
+    ho: undefined,
+    p: "ios",
+    o: { userScalable: true, initialScale: 1, maximumScale: 2.5 },
+  });
+  const blocks = html
+    .split("<script>")
+    .slice(1)
+    .map((block) => block.slice(0, block.indexOf("</script>")));
+  const script = blocks[blocks.length - 1];
 
-    const start = script.indexOf("function " + name);
-    if (start === -1) throw new Error(name + " not found");
-    let depth = 0;
-    for (let i = script.indexOf("{", start); i < script.length; i++) {
-      if (script[i] === "{") depth++;
-      else if (script[i] === "}") {
-        depth--;
-        if (depth === 0) return script.slice(start, i + 1);
-      }
+  const start = script.indexOf("function " + name);
+  if (start === -1) throw new Error(name + " not found");
+  let depth = 0;
+  for (let i = script.indexOf("{", start); i < script.length; i++) {
+    if (script[i] === "{") depth++;
+    else if (script[i] === "}") {
+      depth--;
+      if (depth === 0) return script.slice(start, i + 1);
     }
-    throw new Error(name + " is unbalanced");
   }
+  throw new Error(name + " is unbalanced");
+}
 
+describe("staged removal", () => {
   function fakeElement(classes: string[]) {
     const set = new Set(classes);
     return {
@@ -790,5 +790,83 @@ describe("staged removal", () => {
     removeHighlightsNow([highlight], "highlight-exit", "code", "message");
 
     expect(classesAtRemoval).toEqual(["yh"]);
+  });
+});
+
+describe("highlight geometry", () => {
+  type Box = { left: number; top: number; width: number; height: number };
+
+  function loadMeasure(visualViewport?: Record<string, number>) {
+    const source = [
+      injectedFunctionSource("measureElements"),
+      injectedFunctionSource("unionRect"),
+    ].join("\n");
+    const [measureElements, unionRect] = new Function(
+      "window",
+      `${source}; return [measureElements, unionRect];`
+    )({ visualViewport }) as [
+      (elements: unknown[]) => { x: number; y: number }[],
+      (rects: unknown[]) => Record<string, number>,
+    ];
+    return { measureElements, unionRect };
+  }
+
+  const elementWith = (boxes: Box[]) => ({ getClientRects: () => boxes });
+
+  it("reports one box per line rather than one per element", () => {
+    const { measureElements } = loadMeasure();
+    // A highlight wrapping across two lines: one element, two line boxes.
+    const rects = measureElements([
+      elementWith([
+        { left: 10, top: 20, width: 100, height: 18 },
+        { left: 0, top: 38, width: 60, height: 18 },
+      ]),
+    ]);
+    expect(rects).toEqual([
+      { x: 10, y: 20, width: 100, height: 18 },
+      { x: 0, y: 38, width: 60, height: 18 },
+    ]);
+  });
+
+  it("reports where the text is on screen when the page is zoomed", () => {
+    const { measureElements } = loadMeasure({
+      scale: 2,
+      offsetLeft: 5,
+      offsetTop: 10,
+    });
+    const rects = measureElements([
+      elementWith([{ left: 15, top: 30, width: 50, height: 20 }]),
+    ]);
+    // Layout coordinates are relative to the layout viewport; the visual one is
+    // offset and magnified, which is what the reader actually sees.
+    expect(rects).toEqual([{ x: 20, y: 40, width: 100, height: 40 }]);
+  });
+
+  it("skips collapsed boxes that would drag the union towards the origin", () => {
+    const { measureElements, unionRect } = loadMeasure();
+    const rects = measureElements([
+      elementWith([
+        { left: 0, top: 0, width: 0, height: 0 },
+        { left: 40, top: 50, width: 30, height: 10 },
+      ]),
+    ]);
+    expect(rects).toHaveLength(1);
+    expect(unionRect(rects)).toEqual({ x: 40, y: 50, width: 30, height: 10 });
+  });
+
+  it("wraps every line in a single box", () => {
+    const { unionRect } = loadMeasure();
+    expect(
+      unionRect([
+        { x: 10, y: 20, width: 100, height: 18 },
+        { x: 0, y: 38, width: 60, height: 18 },
+      ])
+    ).toEqual({ x: 0, y: 20, width: 110, height: 36 });
+  });
+
+  it("reports an empty box when there is nothing to measure", () => {
+    const { unionRect } = loadMeasure();
+    // JSON has no Infinity: a seeded union would serialize to null over the bridge.
+    expect(unionRect([])).toEqual({ x: 0, y: 0, width: 0, height: 0 });
   });
 });

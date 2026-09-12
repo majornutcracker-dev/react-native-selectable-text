@@ -8,6 +8,7 @@ import {
   type Highlights,
   type SelectableTextViewError,
   type HighlightData,
+  type PressedHighlightData,
   type HighlighterName,
   type SelectionActionOptions,
   type FocusHighlightOptions,
@@ -154,9 +155,14 @@ const SelectableTextView = React.forwardRef<
         } else if (data.type === BridgingNames.events.onError) {
           onError?.(data.value as SelectableTextViewError);
         } else if (data.type === BridgingNames.events.onHighlightPressed) {
-          const className = await onHighlightPressed?.(
-            data.value as HighlightData
-          );
+          const pressed = data.value as PressedHighlightData;
+          const className = await onHighlightPressed?.({
+            ...pressed,
+            // A highlighter whose spans were all unwrapped reports no boxes;
+            // hand the callback a usable shape rather than undefined.
+            rect: pressed.rect ?? { x: 0, y: 0, width: 0, height: 0 },
+            rects: pressed.rects ?? [],
+          });
           if (className) {
             _postMessage({
               type: BridgingNames.functions.focusHighlight,

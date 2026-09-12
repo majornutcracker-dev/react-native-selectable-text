@@ -653,12 +653,76 @@ export const htmlContent = ({
       }
 
       // @native-event
-      function sendOnHighlightPressed(highlights, text) {
+      function sendOnHighlightPressed(highlights, text, rects) {
+        const list = rects || [];
         postMessage(BridgingNames.events.onHighlightPressed, {
           id: highlights.id,
           name: highlights.classApplier.className,
           text: text ?? "",
+          rect: unionRect(list),
+          rects: list,
         });
+      }
+
+      /**
+       * Measures a highlight in the frame the WebView itself occupies.
+       *
+       * getClientRects gives one box per line box rather than one per element,
+       * so a highlight wrapping across lines is reported line by line instead
+       * of as one tall box spanning the full column width.
+       *
+       * Coordinates are relative to the visual viewport, not the layout one, so
+       * a pinched-in page reports where the text actually is on screen. The
+       * fallbacks keep it correct on engines without visualViewport, where the
+       * two viewports are the same thing.
+       *
+       * @sdk-internal
+       */
+      function measureElements(elements) {
+        const viewport = window.visualViewport;
+        const scale = (viewport && viewport.scale) || 1;
+        const offsetLeft = (viewport && viewport.offsetLeft) || 0;
+        const offsetTop = (viewport && viewport.offsetTop) || 0;
+        const measured = [];
+        elements.forEach(function (element) {
+          if (!element.getClientRects) {
+            return;
+          }
+          const boxes = element.getClientRects();
+          for (let i = 0; i < boxes.length; i++) {
+            const box = boxes[i];
+            // Zero-sized boxes come from collapsed or hidden fragments and
+            // would only drag a union box off towards the origin.
+            if (box.width <= 0 || box.height <= 0) {
+              continue;
+            }
+            measured.push({
+              x: (box.left - offsetLeft) * scale,
+              y: (box.top - offsetTop) * scale,
+              width: box.width * scale,
+              height: box.height * scale,
+            });
+          }
+        });
+        return measured;
+      }
+
+      // @sdk-internal
+      function unionRect(rects) {
+        if (rects.length === 0) {
+          return { x: 0, y: 0, width: 0, height: 0 };
+        }
+        let left = rects[0].x;
+        let top = rects[0].y;
+        let right = rects[0].x + rects[0].width;
+        let bottom = rects[0].y + rects[0].height;
+        rects.forEach(function (rect) {
+          left = Math.min(left, rect.x);
+          top = Math.min(top, rect.y);
+          right = Math.max(right, rect.x + rect.width);
+          bottom = Math.max(bottom, rect.y + rect.height);
+        });
+        return { x: left, y: top, width: right - left, height: bottom - top };
       }
 
       // @native-event
@@ -1109,8 +1173,9 @@ export const htmlContent = ({
         if (!highlight) {
           return;
         }
-        const text = getTextFromElements(highlight.getHighlightElements());
-        sendOnHighlightPressed(highlight, text);
+        const elements = highlight.getHighlightElements();
+        const text = getTextFromElements(elements);
+        sendOnHighlightPressed(highlight, text, measureElements(elements));
       }
 
       // <------------------- Internal utils functions ------------------------>

@@ -30,6 +30,39 @@ export type HighlightData = {
   text: string;
 };
 
+/**
+ * A box measured inside the WebView, in points from the top-left of the
+ * WebView itself — the same frame as the component's own layout, so the values
+ * drop straight into an absolutely positioned overlay.
+ *
+ * Zoom is already accounted for, so a pinched-in page reports where the text
+ * actually sits on screen rather than where it sits in the layout.
+ */
+export type HighlightRect = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+/**
+ * What {@link SelectableTextViewPropsBase.onHighlightPressed} receives: the
+ * highlight, plus where it is on screen at the moment it was tapped.
+ */
+export type PressedHighlightData = HighlightData & {
+  /**
+   * The box around the whole highlight, covering every line it spans.
+   * Use it to anchor a popover or a tooltip to the highlight.
+   */
+  rect: HighlightRect;
+  /**
+   * One box per line the highlight covers, for drawing something that has to
+   * follow the text itself rather than sit next to it. A highlight on a single
+   * line reports one box, identical to `rect`.
+   */
+  rects: HighlightRect[];
+};
+
 export type GoogleFontFamily = {
   family: string;
   weights?: string;
@@ -446,14 +479,16 @@ export type SelectableTextViewPropsBase = {
   /**
    * --> State property
    * Called when a highlight is pressed.
-   * The payload includes the id of the highlight, the name of the highlight and the text of the highlight.
+   * The payload includes the id, name and text of the highlight, plus `rect` and
+   * `rects`: where it sits inside the WebView when it was tapped, ready to anchor
+   * a popover to. Those are a snapshot — scrolling afterwards does not update them.
    * @param highlight
    * @returns The className to apply to the highlight a focus style, you can styles for this className in the css property or return void to not apply any style.
    * The focus style is applied in place (without scrolling); use `focusHighlight(id)` if you also want to scroll to it.
    * The callback may be async: return a `Promise` and the resolved className (if any) is applied.
    */
   onHighlightPressed?: (
-    highlight: HighlightData
+    highlight: PressedHighlightData
   ) => string | void | Promise<string | void>;
   /**
    * --> State property

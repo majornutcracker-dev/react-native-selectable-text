@@ -122,10 +122,40 @@ describe("onHighlightPressed", () => {
     const payload = { id: "h1", name: "yh", text: "hi" };
     await fireMessage(BridgingNames.events.onHighlightPressed, payload);
 
-    expect(onHighlightPressed).toHaveBeenCalledWith(payload);
+    // A payload with no geometry still reaches the callback with a usable shape.
+    expect(onHighlightPressed).toHaveBeenCalledWith({
+      ...payload,
+      rect: { x: 0, y: 0, width: 0, height: 0 },
+      rects: [],
+    });
     expect(lastPosted()).toEqual({
       type: BridgingNames.functions.focusHighlight,
       value: { id: "h1", className: "focus-cls", options: { scroll: false } },
+    });
+  });
+
+  it("hands the callback where the highlight is on screen", async () => {
+    const onHighlightPressed = jest.fn();
+    renderComponent({ onHighlightPressed });
+
+    const rects = [
+      { x: 10, y: 20, width: 100, height: 18 },
+      { x: 0, y: 38, width: 60, height: 18 },
+    ];
+    await fireMessage(BridgingNames.events.onHighlightPressed, {
+      id: "h1",
+      name: "yh",
+      text: "hi",
+      rect: { x: 0, y: 20, width: 110, height: 36 },
+      rects,
+    });
+
+    expect(onHighlightPressed).toHaveBeenCalledWith({
+      id: "h1",
+      name: "yh",
+      text: "hi",
+      rect: { x: 0, y: 20, width: 110, height: 36 },
+      rects,
     });
   });
 
