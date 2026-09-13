@@ -21,6 +21,12 @@ import type { ShouldStartLoadRequest } from "react-native-webview/lib/WebViewTyp
 /** How long a request to the WebView may go unanswered before it rejects. */
 const PROMISE_TIMEOUT_MS = 2000;
 
+type PendingPromise = {
+  resolve: (value: any) => void;
+  reject: (reason?: any) => void;
+  timer?: ReturnType<typeof setTimeout>;
+};
+
 export type SelectableTextViewProps = SelectableTextViewPropsBase & {
   webViewProps?: Omit<
     WebViewProps,
@@ -48,13 +54,7 @@ const SelectableTextView = React.forwardRef<
     onHighlightsVisibilityStateChange,
     webViewProps,
   } = props;
-  const promises = React.useRef<{
-    [key: string]: {
-      resolve: (value: any) => void;
-      reject: (reason?: any) => void;
-      timer?: ReturnType<typeof setTimeout>;
-    };
-  }>({});
+  const promises = React.useRef<Record<string, PendingPromise>>({});
 
   /**
    * Forgets a pending request and cancels its timeout.
@@ -398,105 +398,34 @@ const SelectableTextView = React.forwardRef<
     });
   };
 
-  const getSelectedText = async () => {
-    return new Promise<string>((resolve, reject) => {
+  const _request = <T,>(type: string) =>
+    new Promise<T>((resolve, reject) => {
       const id = generatePromiseId();
-      promises.current[id] = {
-        resolve,
-        reject,
-      };
-      _postMessage({
-        type: BridgingNames.promises.getSelectedText,
-        value: id,
-      });
-      promises.current[id].timer = setTimeout(() => {
-        if (promises.current[id]) {
-          promises.current[id]?.reject(new Error("Timeout"));
+      const entry: PendingPromise = { resolve, reject };
+      promises.current[id] = entry;
+      _postMessage({ type, value: id });
+      entry.timer = setTimeout(() => {
+        if (promises.current[id] === entry) {
+          entry.reject(new Error("Timeout"));
           settlePromise(id);
         }
       }, PROMISE_TIMEOUT_MS);
     });
-  };
 
-  const getHighlights = async () => {
-    return new Promise<Highlights>((resolve, reject) => {
-      const id = generatePromiseId();
-      promises.current[id] = {
-        resolve,
-        reject,
-      };
-      _postMessage({
-        type: BridgingNames.promises.getHighlights,
-        value: id,
-      });
-      promises.current[id].timer = setTimeout(() => {
-        if (promises.current[id]) {
-          promises.current[id]?.reject(new Error("Timeout"));
-          settlePromise(id);
-        }
-      }, PROMISE_TIMEOUT_MS);
-    });
-  };
+  const getSelectedText = () =>
+    _request<string>(BridgingNames.promises.getSelectedText);
 
-  const getAllHighlightsData = async () => {
-    return new Promise<HighlightData[]>((resolve, reject) => {
-      const id = generatePromiseId();
-      promises.current[id] = {
-        resolve,
-        reject,
-      };
-      _postMessage({
-        type: BridgingNames.promises.getAllHighlightsData,
-        value: id,
-      });
-      promises.current[id].timer = setTimeout(() => {
-        if (promises.current[id]) {
-          promises.current[id]?.reject(new Error("Timeout"));
-          settlePromise(id);
-        }
-      }, PROMISE_TIMEOUT_MS);
-    });
-  };
+  const getHighlights = () =>
+    _request<Highlights>(BridgingNames.promises.getHighlights);
 
-  const getHighlightsVisibilityState = () => {
-    return new Promise<boolean>((resolve, reject) => {
-      const id = generatePromiseId();
-      promises.current[id] = {
-        resolve,
-        reject,
-      };
-      _postMessage({
-        type: BridgingNames.promises.getHighlightsVisibilityState,
-        value: id,
-      });
-      promises.current[id].timer = setTimeout(() => {
-        if (promises.current[id]) {
-          promises.current[id]?.reject(new Error("Timeout"));
-          settlePromise(id);
-        }
-      }, PROMISE_TIMEOUT_MS);
-    });
-  };
+  const getAllHighlightsData = () =>
+    _request<HighlightData[]>(BridgingNames.promises.getAllHighlightsData);
 
-  const toggleHighlightsVisibility = () => {
-    return new Promise<boolean>((resolve, reject) => {
-      const id = generatePromiseId();
-      promises.current[id] = {
-        resolve,
-        reject,
-      };
-      _postMessage({
-        type: BridgingNames.promises.toggleHighlightsVisibility,
-        value: id,
-      });
-      promises.current[id].timer = setTimeout(() => {
-        if (promises.current[id]) {
-          promises.current[id]?.reject(new Error("Timeout"));
-          settlePromise(id);
-        }
-      }, PROMISE_TIMEOUT_MS);
-    });
-  };
+  const getHighlightsVisibilityState = () =>
+    _request<boolean>(BridgingNames.promises.getHighlightsVisibilityState);
+
+  const toggleHighlightsVisibility = () =>
+    _request<boolean>(BridgingNames.promises.toggleHighlightsVisibility);
 
   const _postMessage = (message: Message) => {
     if (!isWebViewReady.current) {
