@@ -17,10 +17,19 @@ export type ReaderDocument = {
   /** Drives the native card + reader chrome so each doc feels like its own app. */
   accent: string;
   accentDim: string;
+  /**
+   * The solid page colour. Painted on the HTML canvas and on the WebView itself,
+   * so neither the load nor an overscroll bounce ever shows a different colour.
+   */
+  background: string;
   content: HTMLString;
   css: CSSString;
   fonts: SelectableTextViewFonts;
 };
+
+/** Paints the HTML canvas, which otherwise stays transparent behind .doc. */
+const canvasCss = (background: string) =>
+  `html, body { background: ${background}; }`;
 
 /**
  * Styles shared by every document. Anything document-specific lives in that
@@ -32,19 +41,26 @@ html, body { overflow-x: hidden; max-width: 100%; margin: 0; }
 .doc {
   overflow-wrap: anywhere;
   word-break: break-word;
-  padding: 0 20px 64px;
+  /* The top padding is load-bearing, and it is the only top spacing a document
+     should set. Without it a first child's top margin collapses through .doc
+     and pushes the whole document down, leaving bare canvas above it. */
+  padding: 40px 20px 64px;
   line-height: 1.65;
 }
-.doc h1, .doc h2, .doc h3 { line-height: 1.15; }
-.doc p { margin: 0 0 1.1em; }
-.doc figure { margin: 2rem 0; }
-.doc figcaption {
+
+/* Defaults wrapped in :where(), which gives them no class specificity, so any
+   rule a document writes wins. Written as ".doc p" they silently beat a
+   document's own ".tag { margin }" — (0,1,1) against (0,1,0). */
+:where(.doc) h1, :where(.doc) h2, :where(.doc) h3 { line-height: 1.15; }
+:where(.doc) p { margin: 0 0 1.1em; }
+:where(.doc) figure { margin: 2rem 0; }
+:where(.doc) figcaption {
   font-size: 12px;
   opacity: .7;
   margin-top: .6rem;
   text-align: center;
 }
-.doc svg { display: block; width: 100%; height: auto; }
+:where(.doc) svg { display: block; width: 100%; height: auto; }
 
 /* Entrance: content fades up in sequence as the document opens. */
 .reveal { animation: reveal .7s cubic-bezier(.2,.8,.2,1) both; }
@@ -142,15 +158,18 @@ const attentionContent: HTMLString = `
 </article>
 `;
 
+const ATTENTION_BG = "#FBF9F4";
+
 const attentionCss: CSSString = `
 ${baseCss}
+${canvasCss(ATTENTION_BG)}
 .doc {
   font-family: "Source Sans 3", system-ui, sans-serif;
-  background: #FBF9F4;
+  background: ${ATTENTION_BG};
   color: #21201C;
   font-size: 16px;
 }
-.masthead { padding: 40px 0 8px; }
+.masthead { padding: 0 0 8px; }
 .kicker {
   font-size: 11px;
   letter-spacing: .18em;
@@ -293,13 +312,17 @@ const glowContent: HTMLString = `
 </article>
 `;
 
+// The solid colour under the glow gradient.
+const GLOW_BG = "#05070D";
+
 const glowCss: CSSString = `
 ${baseCss}
+${canvasCss(GLOW_BG)}
 .doc {
   font-family: "Inter", system-ui, sans-serif;
   background:
     radial-gradient(1200px 400px at 50% -10%, #10314A 0%, transparent 70%),
-    #05070D;
+    ${GLOW_BG};
   color: #DCE7F2;
   font-size: 16px;
 }
@@ -308,7 +331,7 @@ ${baseCss}
   letter-spacing: .2em;
   text-transform: uppercase;
   color: ${theme.highlight.mint.base};
-  margin: 40px 0 10px;
+  margin: 0 0 10px;
 }
 .doc h1 { font-size: 42px; font-weight: 700; margin: 0 0 14px; letter-spacing: -.03em; }
 .glow {
@@ -431,18 +454,21 @@ const typeContent: HTMLString = `
 </article>
 `;
 
+const TYPE_BG = "#14110E";
+
 const typeCss: CSSString = `
 ${baseCss}
+${canvasCss(TYPE_BG)}
 .doc {
   font-family: "Source Serif 4", Georgia, serif;
-  background: #14110E;
+  background: ${TYPE_BG};
   color: #EDE6DA;
   font-size: 17px;
 }
 .doc h1 {
   font-size: 44px;
   font-weight: 600;
-  margin: 44px 0 12px;
+  margin: 0 0 12px;
   letter-spacing: -.02em;
   text-shadow: 0 1px 0 rgba(255,255,255,.14), 0 -1px 0 rgba(0,0,0,.55);
 }
@@ -522,6 +548,7 @@ export const documents: ReaderDocument[] = [
     readingTime: "4 min",
     accent: theme.highlight.amber.base,
     accentDim: theme.highlight.amber.dim,
+    background: ATTENTION_BG,
     content: attentionContent,
     css: attentionCss,
     fonts: googleFonts({
@@ -540,6 +567,7 @@ export const documents: ReaderDocument[] = [
     readingTime: "3 min",
     accent: theme.highlight.azure.base,
     accentDim: theme.highlight.azure.dim,
+    background: GLOW_BG,
     content: glowContent,
     css: glowCss,
     fonts: googleFonts({ family: "Inter", weights: "400..700" }),
@@ -553,6 +581,7 @@ export const documents: ReaderDocument[] = [
     readingTime: "3 min",
     accent: theme.highlight.coral.base,
     accentDim: theme.highlight.coral.dim,
+    background: TYPE_BG,
     content: typeContent,
     css: typeCss,
     fonts: googleFonts({

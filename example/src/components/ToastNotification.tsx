@@ -142,7 +142,7 @@ export function ToastNotification({
 
   return (
     <View
-      style={[styles.container, { top: topInset + 12 }]}
+      style={[styles.container, { top: topInset + 70 }]}
       pointerEvents="box-none"
     >
       <Animated.View

@@ -72,13 +72,13 @@ export default function HighlightsData() {
   const { states } = useHighlights();
 
   const sections = useMemo<Section[]>(() => {
-    const live = parseHighlightsData(data);
-    if (live.length > 0) {
-      return [
-        { title: "Current document", accent: theme.color.accent, data: live },
-      ];
+    if (!data) {
+      return sectionsFrom(states);
     }
-    return sectionsFrom(states);
+    const live = parseHighlightsData(data);
+    return [
+      { title: "Current document", accent: theme.color.accent, data: live },
+    ];
   }, [data, states]);
 
   const total = sections.reduce((sum, s) => sum + s.data.length, 0);

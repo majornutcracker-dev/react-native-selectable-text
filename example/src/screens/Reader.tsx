@@ -18,9 +18,9 @@ import { useRouter } from "expo-router";
 import Clipboard from "@react-native-clipboard/clipboard";
 
 import { ActionsFab } from "@/components/ActionsFab";
-import { BottomSheetFab } from "@/components/BottomSheetFab";
 import { HighlighterFab } from "@/components/HighlighterFab";
 import { HighlightMenu } from "@/components/HighlightMenu";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { NotesBottomSheet } from "@/components/NotesBottomSheet";
 import { useToastNotification } from "@/context/ToastNotificationProvider";
 import { useHighlights } from "@/context/HighlightsProvider";
@@ -43,6 +43,7 @@ export default function Reader(props: { documentId: string }) {
 
   const [currentHighlighterName, setCurrentHighlighterName] =
     useState<HighlighterName>(highlighters[0].name);
+  const [loading, setLoading] = useState(true);
   // The WebView's own box: the frame onHighlightPressed reports against.
   const [contentBounds, setContentBounds] = useState({ width: 0, height: 0 });
   const {
@@ -89,11 +90,26 @@ export default function Reader(props: { documentId: string }) {
             {doc.title}
           </Text>
         </View>
-        <View style={[styles.counter, { backgroundColor: doc.accentDim }]}>
+        <Pressable
+          onPress={async () => {
+            try {
+              const data = await viewRef.current?.getAllHighlightsData();
+              router.push({
+                pathname: "/highlights",
+                params: { data: JSON.stringify(data ?? []) },
+              });
+            } catch (error) {
+              showToast(
+                error instanceof Error ? error.message : "Unknown error"
+              );
+            }
+          }}
+          style={[styles.counter, { backgroundColor: doc.accentDim }]}
+        >
           <Text style={[styles.counterText, { color: doc.accent }]}>
             {count}
           </Text>
-        </View>
+        </Pressable>
       </View>
 
       <View
@@ -103,7 +119,7 @@ export default function Reader(props: { documentId: string }) {
         <SelectableTextView
           ref={viewRef}
           webViewProps={{
-            style: styles.webview,
+            style: [styles.webview, { backgroundColor: doc.background }],
             menuItems: [
               { key: "highlight", label: "Highlight" },
               { key: "highlight-validated", label: "Highlight (4+ chars)" },
@@ -136,6 +152,7 @@ export default function Reader(props: { documentId: string }) {
                 }
               }
             },
+            onLoadEnd: () => setLoading(false),
           }}
           highlighters={highlighters}
           content={doc.content}
@@ -172,7 +189,11 @@ export default function Reader(props: { documentId: string }) {
             showToast(visible ? "Highlights visible" : "Highlights hidden");
           }}
         />
-
+        <LoadingOverlay
+          visible={loading}
+          background={doc.background}
+          color={doc.accent}
+        />
         <HighlightMenu
           highlight={menuHighlight}
           bounds={contentBounds}
@@ -189,8 +210,6 @@ export default function Reader(props: { documentId: string }) {
           }}
         />
       </View>
-
-      <BottomSheetFab onPress={() => showNote(null)} />
       <ActionsFab
         selectableTextViewRef={viewRef}
         accent={doc.accent}

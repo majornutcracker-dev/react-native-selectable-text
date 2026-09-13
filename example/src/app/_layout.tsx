@@ -16,7 +16,6 @@ export default function RootLayout() {
             screenOptions={{
               headerShown: false,
               contentStyle: { backgroundColor: theme.color.bg },
-              animation: "slide_from_right",
             }}
           />
         </ToastNotificationProvider>
