@@ -61,7 +61,7 @@
   },
   "author": "Majornutcracker <joshiparsa@gmail.com> (JoshuaPariona)",
   "license": "MIT",
-  "homepage": "https://docs.majornutcracker.com/react-native-selectable-text",
+  "homepage": "https://developer.majornutcracker.com/docs/react-native-selectable-text",
   "devDependencies": {
     "@commitlint/cli": "^21.2.0",
     "@commitlint/config-conventional": "^21.2.2",
