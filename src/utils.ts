@@ -283,6 +283,13 @@ export function toCssLength(
   return typeof value === "number" ? `${value}px` : value;
 }
 
+/**
+ * State class carried by a highlight while its entrance animation plays. The
+ * WebView runtime adds it when a highlight is created or restored and drops it
+ * as soon as that animation ends or is interrupted.
+ */
+export const ENTERING_CLASS = "mnst-entering";
+
 export function animationToCSS(animation?: AnimationOptions): string {
   if (!animation) {
     return "";
@@ -327,14 +334,26 @@ export function highlightersToCSS(list: Highlighter[]): string {
           return `.${name} {}`;
       }
 
-      const animationRule = animationToCSS(options.animation);
-      if (animationRule) {
+      const animation = options.animation;
+      const animationRule = animationToCSS(animation);
+      // A finite animation is an entrance, so it goes on the entering state class
+      // rather than on the highlighter class. Declared on the class itself it
+      // restarts whenever its animation-name is re-applied — a focus class being
+      // removed, hidden highlights shown again, an exit being cancelled — and so
+      // replays on each of them. `:where()` keeps the specificity of a single
+      // class, so a consumer's focus or exit rule still overrides it. Infinite
+      // animations are ambient and stay where they were.
+      const isEntrance = !!animation && animation.iterationCount !== "infinite";
+      if (animationRule && !isEntrance) {
         declarations.push(animationRule);
       }
 
       const rule = `.${name} {\n  ${declarations.join("\n  ")}\n}`;
-      const keyframes = options.animation?.keyframesCss ?? "";
-      return keyframes ? `${rule}\n${keyframes}` : rule;
+      const entranceRule = isEntrance
+        ? `\n.${name}:where(.${ENTERING_CLASS}) {\n  ${animationRule}\n}`
+        : "";
+      const keyframes = animation?.keyframesCss ?? "";
+      return `${rule}${entranceRule}${keyframes ? `\n${keyframes}` : ""}`;
     })
     .join("\n");
 }
@@ -417,6 +436,19 @@ export const htmlContent = ({
     return false;
   });
   const applierNames = toScriptLiteral(validHL.map((c) => c.name));
+  // Must agree with `highlightersToCSS`: these are the highlighters whose
+  // animation it moved onto the entering state class.
+  const entrances = validHL.flatMap(({ name, options }) =>
+    options.animation && options.animation.iterationCount !== "infinite"
+      ? [{ highlighter: name, animation: options.animation.name }]
+      : []
+  );
+  const entranceHighlighterNames = toScriptLiteral(
+    entrances.map((e) => e.highlighter)
+  );
+  const entranceAnimationNames = toScriptLiteral(
+    entrances.map((e) => e.animation)
+  );
   const content = c ?? "";
   const style = css ?? "";
   const cssClasses = highlightersToCSS(validHL);
@@ -803,6 +835,9 @@ export const htmlContent = ({
             __MNST__.highlighter.deserialize(highlights);
           }
           reconcileIgnoredElements();
+          // Every highlight here is new — the old ones were just removed — so
+          // restored highlights play their entrance once, as they did before.
+          markEntering(__MNST__.highlighter.highlights || []);
           applyHighlightVisibilityClass(false, true);
           sendOnHighlightChange(__MNST__.highlighter.serialize());
         } catch (e) {
@@ -875,13 +910,14 @@ export const htmlContent = ({
           }
           const rangySel = rangy.getSelection();
           if (!rangySel.isCollapsed) {
-            __MNST__.highlighter.highlightSelection(classApplierName, {
+            const created = __MNST__.highlighter.highlightSelection(classApplierName, {
               exclusive:
                 typeof __MNST__.overlapping === "boolean"
                   ? !__MNST__.overlapping
                   : true,
             });
             reconcileIgnoredElements();
+            markEntering(created || []);
             applyHighlightVisibilityClass(false, true);
             sendOnHighlightChange(__MNST__.highlighter.serialize());
             if (!keepSelection) {
@@ -1078,6 +1114,7 @@ export const htmlContent = ({
         }
         highlight.getHighlightElements().forEach(function (el) {
           if (on) {
+            endEntrance(el);
             el.classList.add(className);
           } else {
             el.classList.remove(className);
@@ -1255,6 +1292,46 @@ export const htmlContent = ({
         }
       }
 
+      // Entrance animations run on a state class that goes away once they have
+      // played (or been interrupted), so re-applying a highlighter's
+      // animation-name later has nothing left to replay.
+      const ENTRANCE_HIGHLIGHTERS = new Set(${entranceHighlighterNames});
+      const ENTRANCE_ANIMATIONS = new Set(${entranceAnimationNames});
+
+      // @sdk-internal
+      function markEntering(highlights) {
+        if (ENTRANCE_HIGHLIGHTERS.size === 0) {
+          return;
+        }
+        highlights.forEach((highlight) => {
+          if (!ENTRANCE_HIGHLIGHTERS.has(highlight.classApplier.className)) {
+            return;
+          }
+          highlight.getHighlightElements().forEach((el) => {
+            el.classList.add("${ENTERING_CLASS}");
+          });
+        });
+      }
+
+      // @sdk-internal
+      function onEntranceSettled(event) {
+        const target = event.target;
+        if (
+          ENTRANCE_ANIMATIONS.has(event.animationName) &&
+          target &&
+          target.classList
+        ) {
+          target.classList.remove("${ENTERING_CLASS}");
+        }
+      }
+
+      // Interacting with a highlight ends its entrance. The animationcancel
+      // listener covers this as well; doing it here too means the fix does not
+      // rest on that event alone.
+      function endEntrance(el) {
+        el.classList.remove("${ENTERING_CLASS}");
+      }
+
       function clearHighlightFocusStyle() {
         __MNST__.state.focusedElements.forEach((entry) => {
           entry.el.classList.remove(entry.className);
@@ -1308,6 +1385,7 @@ export const htmlContent = ({
         const focusClassName = className || "mnst-default-focus";
         elements.forEach((el) => {
           if(__MNST__.state.visible) {
+            endEntrance(el);
             el.classList.add(focusClassName);
             __MNST__.state.focusedElements.push({ el, className: focusClassName });
           }
@@ -1460,6 +1538,10 @@ export const htmlContent = ({
             }
           });
         }
+
+        // Delegated: animation events bubble, and highlights come and go.
+        document.addEventListener("animationend", onEntranceSettled);
+        document.addEventListener("animationcancel", onEntranceSettled);
 
         document.addEventListener("selectionchange", function (e) {
           e.preventDefault();

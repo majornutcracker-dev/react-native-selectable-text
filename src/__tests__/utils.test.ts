@@ -1,4 +1,5 @@
 import {
+  ENTERING_CLASS,
   escapeHtmlAttribute,
   toScriptLiteral,
   escapeCssString,
@@ -660,6 +661,7 @@ describe("staged removal", () => {
 
   function loadStageRemoval(MNST: Record<string, unknown>) {
     const source = [
+      injectedFunctionSource("endEntrance"),
       injectedFunctionSource("setExitClass"),
       injectedFunctionSource("stageRemoval"),
     ].join("\n");
@@ -927,5 +929,145 @@ describe("selection pinning", () => {
       expect.anything(),
       expect.anything()
     );
+  });
+});
+
+describe("entrance animations", () => {
+  function animated(iterationCount: number | "infinite"): Highlighter {
+    return {
+      name: "pop",
+      options: {
+        type: "background-color",
+        color: "gold",
+        animation: {
+          name: "popIn",
+          keyframesCss:
+            "@keyframes popIn { from { opacity: 0 } to { opacity: 1 } }",
+          duration: "300ms",
+          timingFunction: "ease-out",
+          iterationCount,
+        },
+      },
+    };
+  }
+
+  it("moves a finite animation onto the entering state class", () => {
+    const css = highlightersToCSS([animated(1)]);
+    const classRule = css.slice(0, css.indexOf("}") + 1);
+    expect(classRule).toContain("background-color: gold;");
+    // Left on the highlighter class, re-applying it would replay the entrance.
+    expect(classRule).not.toContain("animation:");
+    expect(css).toContain(
+      `.pop:where(.${ENTERING_CLASS}) {\n  animation: popIn 300ms ease-out 1;\n}`
+    );
+    expect(css).toContain("@keyframes popIn");
+  });
+
+  it("keeps an infinite animation on the highlighter class", () => {
+    const css = highlightersToCSS([animated("infinite")]);
+    expect(css).toContain("animation: popIn 300ms ease-out infinite;");
+    expect(css).not.toContain(ENTERING_CLASS);
+  });
+
+  it("tells the runtime which highlighters and keyframes are entrances", () => {
+    const html = htmlContent({
+      hl: [animated(1)],
+      h: undefined,
+      c: "<p>hi</p>",
+      css: undefined,
+      f: undefined,
+      ho: undefined,
+      p: "ios",
+      o: undefined,
+    });
+    expect(html).toContain('ENTRANCE_HIGHLIGHTERS = new Set(["pop"])');
+    expect(html).toContain('ENTRANCE_ANIMATIONS = new Set(["popIn"])');
+  });
+
+  function fakeEl(classes: string[]) {
+    const set = new Set(classes);
+    return {
+      set,
+      classList: {
+        add: (c: string) => set.add(c),
+        remove: (c: string) => set.delete(c),
+      },
+    };
+  }
+
+  type Runtime = {
+    markEntering: (highlights: unknown[]) => void;
+    onEntranceSettled: (event: unknown) => void;
+    setExitClass: (highlight: unknown, className: string, on: boolean) => void;
+    applyFocusStyle: (elements: unknown[], className?: string) => void;
+  };
+
+  function loadRuntime(): Runtime {
+    const source = [
+      "endEntrance",
+      "markEntering",
+      "onEntranceSettled",
+      "setExitClass",
+      "applyFocusStyle",
+    ]
+      .map(injectedFunctionSource)
+      .join("\n");
+    return new Function(
+      "ENTRANCE_HIGHLIGHTERS",
+      "ENTRANCE_ANIMATIONS",
+      "__MNST__",
+      `${source}; return { markEntering, onEntranceSettled, setExitClass, applyFocusStyle };`
+    )(new Set(["pop"]), new Set(["popIn"]), {
+      state: { visible: true, focusedElements: [] },
+    });
+  }
+
+  it("marks only highlights whose highlighter has an entrance", () => {
+    const { markEntering } = loadRuntime();
+    const withEntrance = fakeEl(["pop"]);
+    const withoutEntrance = fakeEl(["yh"]);
+    markEntering([
+      {
+        classApplier: { className: "pop" },
+        getHighlightElements: () => [withEntrance],
+      },
+      {
+        classApplier: { className: "yh" },
+        getHighlightElements: () => [withoutEntrance],
+      },
+    ]);
+    expect(withEntrance.set.has(ENTERING_CLASS)).toBe(true);
+    // A class that never animates would never be cleaned up.
+    expect(withoutEntrance.set.has(ENTERING_CLASS)).toBe(false);
+  });
+
+  it("drops the state class once the entrance ends or is cancelled", () => {
+    const { onEntranceSettled } = loadRuntime();
+    const el = fakeEl(["pop", ENTERING_CLASS]);
+    onEntranceSettled({ animationName: "popIn", target: el });
+    expect(el.set.has(ENTERING_CLASS)).toBe(false);
+  });
+
+  it("ignores a different animation settling on the same element", () => {
+    const { onEntranceSettled } = loadRuntime();
+    const el = fakeEl(["pop", ENTERING_CLASS]);
+    onEntranceSettled({ animationName: "focusPulse", target: el });
+    expect(el.set.has(ENTERING_CLASS)).toBe(true);
+  });
+
+  it("ends the entrance when a highlight is focused", () => {
+    const { applyFocusStyle } = loadRuntime();
+    const el = fakeEl(["pop", ENTERING_CLASS]);
+    applyFocusStyle([el], "focus");
+    expect(el.set.has(ENTERING_CLASS)).toBe(false);
+    expect(el.set.has("focus")).toBe(true);
+  });
+
+  it("ends the entrance when a highlight starts exiting", () => {
+    const { setExitClass } = loadRuntime();
+    const el = fakeEl(["pop", ENTERING_CLASS]);
+    setExitClass({ getHighlightElements: () => [el] }, "exit", true);
+    expect(el.set.has(ENTERING_CLASS)).toBe(false);
+    expect(el.set.has("exit")).toBe(true);
   });
 });

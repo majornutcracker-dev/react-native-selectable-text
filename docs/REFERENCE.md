@@ -267,6 +267,23 @@ The default, when `highlighters` is omitted, is a single
 Every option type accepts an optional `animation`. The `@keyframes` rule is
 injected as-is, so it can be shared by several highlighters.
 
+`iterationCount` decides what kind of animation it is:
+
+- **A number** makes it an **entrance**. It plays once when the highlight
+  appears — created from a selection, or restored through the `highlights` prop
+  — and never again. Focusing and unfocusing the highlight, tapping elsewhere,
+  hiding and showing highlights, or cancelling an exit do not replay it. If the
+  highlight is focused or starts exiting while its entrance is still running,
+  the entrance stops there.
+- **`"infinite"`** makes it **ambient**: it runs for as long as the highlight
+  exists. Because it lives on the highlighter's own class, anything that
+  replaces the element's `animation` for a moment — a focus class with its own
+  animation, or hiding the highlights — restarts it from the beginning
+  afterwards.
+
+Entrances are applied through an internal state class that the runtime removes
+once the animation ends. Target `.<name>` in your `css`, not that class.
+
 ```ts
 type AnimationOptions = {
   name: string; // keyframes name
