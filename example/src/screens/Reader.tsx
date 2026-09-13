@@ -25,6 +25,7 @@ import { NotesBottomSheet } from "@/components/NotesBottomSheet";
 import { useToastNotification } from "@/context/ToastNotificationProvider";
 import { useHighlights } from "@/context/HighlightsProvider";
 import { useHighlightOverlay } from "@/hooks/useHighlightOverlay";
+import { useScrollRestore } from "@/hooks/useScrollRestore";
 import {
   HIGHLIGHT_EXIT_CLASS,
   HIGHLIGHT_EXIT_MS,
@@ -43,7 +44,8 @@ export default function Reader(props: { documentId: string }) {
 
   const [currentHighlighterName, setCurrentHighlighterName] =
     useState<HighlighterName>(highlighters[0].name);
-  const [loading, setLoading] = useState(true);
+  // Puts the reader back where it was left; `ready` once that has happened.
+  const scroll = useScrollRestore(doc.id);
   // The WebView's own box: the frame onHighlightPressed reports against.
   const [contentBounds, setContentBounds] = useState({ width: 0, height: 0 });
   const {
@@ -119,6 +121,7 @@ export default function Reader(props: { documentId: string }) {
         <SelectableTextView
           ref={viewRef}
           webViewProps={{
+            ...scroll.webViewProps,
             style: [styles.webview, { backgroundColor: doc.background }],
             menuItems: [
               { key: "highlight", label: "Highlight" },
@@ -152,7 +155,6 @@ export default function Reader(props: { documentId: string }) {
                 }
               }
             },
-            onLoadEnd: () => setLoading(false),
           }}
           highlighters={highlighters}
           content={doc.content}
@@ -190,7 +192,7 @@ export default function Reader(props: { documentId: string }) {
           }}
         />
         <LoadingOverlay
-          visible={loading}
+          visible={!scroll.ready}
           background={doc.background}
           color={doc.accent}
         />

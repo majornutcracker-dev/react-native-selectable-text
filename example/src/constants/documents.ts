@@ -1,5 +1,6 @@
 import {
   CSSString,
+  Highlights,
   HTMLString,
   SelectableTextViewFonts,
   googleFonts,
@@ -22,6 +23,12 @@ export type ReaderDocument = {
    * so neither the load nor an overscroll bounce ever shows a different colour.
    */
   background: string;
+  /**
+   * Serialized highlights the document opens with. They are character offsets
+   * into the text of `content`, so editing that text moves them onto other
+   * words.
+   */
+  initialHighlights: Highlights;
   content: HTMLString;
   css: CSSString;
   fonts: SelectableTextViewFonts;
@@ -549,6 +556,8 @@ export const documents: ReaderDocument[] = [
     accent: theme.highlight.amber.base,
     accentDim: theme.highlight.amber.dim,
     background: ATTENTION_BG,
+    initialHighlights:
+      "type:textContent|85$103$4$highlight-coral-wave$|330$355$1$highlight-amber-marker$|432$512$2$highlight-mint-frame$|766$839$3$highlight-azure-prism$",
     content: attentionContent,
     css: attentionCss,
     fonts: googleFonts({
@@ -568,6 +577,7 @@ export const documents: ReaderDocument[] = [
     accent: theme.highlight.azure.base,
     accentDim: theme.highlight.azure.dim,
     background: GLOW_BG,
+    initialHighlights: "type:textContent",
     content: glowContent,
     css: glowCss,
     fonts: googleFonts({ family: "Inter", weights: "400..700" }),
@@ -582,6 +592,7 @@ export const documents: ReaderDocument[] = [
     accent: theme.highlight.coral.base,
     accentDim: theme.highlight.coral.dim,
     background: TYPE_BG,
+    initialHighlights: "type:textContent",
     content: typeContent,
     css: typeCss,
     fonts: googleFonts({
