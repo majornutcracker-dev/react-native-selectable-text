@@ -2,10 +2,38 @@
 
 Expo module for **iOS and Android** built on `react-native-webview`. It renders
 HTML with advanced text selection, custom context menus, and persistent
-highlighting via [Rangy](https://github.com/timdown/rangy), with a native bridge
-(Swift/Kotlin) to serialize, sync, and restore selections.
+highlighting via [Rangy](https://github.com/timdown/rangy). Serialize, sync, restore selections and more
 
 Web is not supported.
+
+## Demo
+
+Basic usage from the [example app](./example): selecting text, highlight
+entrance and exit animations, the focus effect, and focusing and removing a
+highlight.
+
+<table>
+  <tr>
+    <th>iOS</th>
+    <th>Android</th>
+  </tr>
+  <tr>
+    <td>
+      <img
+        src="./assets/ios.gif"
+        width="280"
+        alt="iOS: selecting text, highlighting it with an entrance animation, focusing a highlight, and removing it with an exit animation"
+      />
+    </td>
+    <td>
+      <img
+        src="./assets/android.gif"
+        width="280"
+        alt="Android: selecting text, highlighting it with an entrance animation, focusing a highlight, and removing it with an exit animation"
+      />
+    </td>
+  </tr>
+</table>
 
 ## Installation
 
