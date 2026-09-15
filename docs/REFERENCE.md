@@ -5,7 +5,7 @@ selection, [Rangy](https://github.com/timdown/rangy)-backed highlights, and a
 message bridge to React Native.
 
 This page is the full surface. For a quick start see the
-[README](../README.md); for a runnable demo see [`example/`](../example).
+[README](../README.md); for a runnable demo see [`example/`](https://github.com/majornutcracker-dev/react-native-selectable-text/tree/main/example).
 
 ## Props
 
@@ -476,7 +476,7 @@ useEffect(() => {
 }, []);
 ```
 
-The [example app](../example) does exactly this, in `useScrollRestore`.
+The [example app](https://github.com/majornutcracker-dev/react-native-selectable-text/tree/main/example) does exactly this, in `useScrollRestore`.
 
 ### Page → React Native: `window.SelectableText.postMessage`
 
@@ -530,4 +530,4 @@ API and can change in any release. Build on the bridge instead.
 
 `content` is rendered as-is; the module does not sanitize it. If the HTML comes
 from an untrusted source, sanitize it before passing it in. See
-[SECURITY.md](../SECURITY.md) for the full trust boundary.
+[SECURITY.md](https://github.com/majornutcracker-dev/react-native-selectable-text/blob/main/SECURITY.md) for the full trust boundary.

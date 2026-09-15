@@ -42,8 +42,21 @@ regardless of whether the release is a patch, minor, or major. It is independent
 
 ## Changelog
 
-Add an entry to [`CHANGELOG.md`](../CHANGELOG.md) for the new version (with the date), moving
-anything from an `Unreleased` section into it.
+[`CHANGELOG.md`](../CHANGELOG.md) follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+For each release:
+
+1. Rename `## [Unreleased]` to `## [1.1.0] - YYYY-MM-DD` (release date, ISO format) and add a
+   fresh, empty `## [Unreleased]` above it.
+2. Group the entries under `### Added`, `### Changed`, `### Deprecated`, `### Removed`,
+   `### Fixed`, or `### Security`.
+3. Update the link references at the bottom:
+   ```md
+   [unreleased]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.1.0...HEAD
+   [1.1.0]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.0.0...v1.1.0
+   ```
+
+This file is maintainer-only: it is excluded from the npm package (see `files` in
+`package.json`), while the rest of `docs/` ships.
 
 ## Verify everything matches
 

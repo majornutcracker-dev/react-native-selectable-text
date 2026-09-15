@@ -18,7 +18,9 @@
     "ios/*.podspec",
     "ios/*.swift",
     "expo-module.config.json",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "docs",
+    "!docs/VERSION-UPDATE.md"
   ],
   "scripts": {
     "build": "expo-module build",
