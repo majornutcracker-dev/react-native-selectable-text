@@ -27,6 +27,11 @@ export type SelectableTextViewFontFace = {
 export type HighlightData = {
   id: string;
   name: HighlighterName;
+  /**
+   * Exactly the highlighted text. Text inside `ignoredElements` is never
+   * painted, so it is left out: a highlight across `E = mc<sup>2</sup>` reads
+   * `"mc"`.
+   */
   text: string;
 };
 

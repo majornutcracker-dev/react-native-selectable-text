@@ -1211,3 +1211,45 @@ describe("bridging custom actions (page side)", () => {
     expect(JSON.parse(literal)).toEqual(BridgingNames);
   });
 });
+
+describe("highlight data text", () => {
+  // Rangy's own getText() also counts text inside ignored elements, which is
+  // never painted. The painted spans are what every path reports.
+  const highlight = {
+    id: 5,
+    classApplier: { className: "yh" },
+    getText: () => "mc2 fits",
+    getHighlightElements: () => [
+      { textContent: "mc" },
+      { textContent: " fits" },
+    ],
+  };
+
+  it("lists exactly the painted text, not the whole selected range", () => {
+    const collect = new Function(
+      "__MNST__",
+      `${injectedFunctionSource("getTextFromElements")}
+       ${injectedFunctionSource("collectHighlightsData")}
+       return collectHighlightsData;`
+    )({ highlighter: { highlights: [highlight] } }) as () => unknown[];
+
+    expect(collect()).toEqual([{ id: "5", name: "yh", text: "mc fits" }]);
+  });
+
+  it("reports a pressed highlight with a string id, like the list does", () => {
+    const posted: { type: string; value: any }[] = [];
+    const send = new Function(
+      "postMessage",
+      "BridgingNames",
+      `${injectedFunctionSource("unionRect")}
+       ${injectedFunctionSource("sendOnHighlightPressed")}
+       return sendOnHighlightPressed;`
+    )(
+      (type: string, value: unknown) => posted.push({ type, value }),
+      BridgingNames
+    ) as (highlight: unknown, text: string, rects: unknown[]) => void;
+
+    send(highlight, "mc fits", []);
+    expect(posted[0].value).toMatchObject({ id: "5", text: "mc fits" });
+  });
+});

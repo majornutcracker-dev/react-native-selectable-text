@@ -679,7 +679,7 @@ export const htmlContent = ({
         return highlights.map((h) => ({
           id: String(h.id),
           name: h.classApplier.className,
-          text: h.getText ? h.getText() : "",
+          text: getTextFromElements(h.getHighlightElements()),
         }));
       }
 
@@ -712,7 +712,7 @@ export const htmlContent = ({
       function sendOnHighlightPressed(highlights, text, rects) {
         const list = rects || [];
         postMessage(BridgingNames.events.onHighlightPressed, {
-          id: highlights.id,
+          id: String(highlights.id),
           name: highlights.classApplier.className,
           text: text ?? "",
           rect: unionRect(list),

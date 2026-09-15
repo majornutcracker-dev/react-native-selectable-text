@@ -394,6 +394,9 @@ kept — it is not counted, listed by `getAllHighlightsData()`, or serialized, a
 `onError` reports `highlight_fully_ignored` so you can tell the user why nothing
 happened.
 
+The `text` in highlight data is exactly what is painted, so it leaves ignored
+content out: a highlight across `E = mc<sup>2</sup>` reads `"mc"`.
+
 ## Error codes
 
 `onError` receives a `SelectableTextViewError` with `{ code, message, details }`.
