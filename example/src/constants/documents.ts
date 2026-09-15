@@ -7,6 +7,7 @@ import {
 } from "@majornutcracker/react-native-selectable-text";
 
 import { highlightMotionCss } from "./highlighters";
+import { searchCss } from "./search";
 import { theme } from "./theme";
 
 export type ReaderDocument = {
@@ -82,6 +83,9 @@ html, body { overflow-x: hidden; max-width: 100%; margin: 0; }
 
 /* Focus pulse + the staged exit animation, shared by every document. */
 ${highlightMotionCss}
+
+/* In-page search: matches, the current match, and the fallback outline. */
+${searchCss}
 `;
 
 /* ------------------------------------------------------------------ */

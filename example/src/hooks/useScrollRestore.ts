@@ -1,51 +1,27 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { SelectableTextViewRef } from "@majornutcracker/react-native-selectable-text";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import type { WebViewProps } from "react-native-webview";
 
 import { useHighlights } from "@/context/HighlightsProvider";
 
 type ScrollHandler = NonNullable<WebViewProps["onScroll"]>;
-type MessageHandler = NonNullable<WebViewProps["onMessage"]>;
-
-/** Posted by the injected script once the saved position has been applied. */
-const RESTORED_MESSAGE = "example:scrollRestored";
 
 /**
- * How long after the load to stop waiting for that message. A page that failed
- * to load never sends it, and the reader must not stay behind the spinner.
+ * The restore runs on mount, so this covers the page load as well as the web
+ * fonts the script waits for. If it runs out the reader is shown where it is,
+ * rather than left behind the spinner.
  */
-const RESTORE_FALLBACK_MS = 2000;
+const RESTORE_TIMEOUT_MS = 6000;
 
 function clampFraction(value: number): number {
   return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0;
-}
-
-/**
- * Runs once the document has loaded. It waits for web fonts first: the readers
- * use Google Fonts with `display=swap`, so scrolling before they arrive lands on
- * a layout that is about to reflow, and the position drifts. It reports back
- * even when there is nowhere to scroll, because that report is also what lifts
- * the loading overlay.
- */
-function buildRestoreScript(fraction: number): string {
-  return `
-(function () {
-  var fraction = ${JSON.stringify(clampFraction(fraction))};
-  function restore() {
-    if (fraction > 0) {
-      var max = document.documentElement.scrollHeight - window.innerHeight;
-      if (max > 0) {
-        window.scrollTo(0, fraction * max);
-      }
-    }
-    window.ReactNativeWebView.postMessage(
-      JSON.stringify({ type: ${JSON.stringify(RESTORED_MESSAGE)} })
-    );
-  }
-  var fonts = document.fonts && document.fonts.ready;
-  (fonts || Promise.resolve()).then(restore, restore);
-})();
-true;
-`;
 }
 
 /**
@@ -56,30 +32,56 @@ true;
  * screen. `onScroll` reports offset, content size and viewport in one unit per
  * platform — points on iOS, dp on Android — so the fraction is unit-free.
  *
- * Returns the WebView props to spread, and `ready` for the loading overlay.
+ * Returns `onScroll` for the WebView and `ready` for the loading overlay.
  */
-export function useScrollRestore(documentId: string) {
+export function useScrollRestore(
+  documentId: string,
+  viewRef: RefObject<SelectableTextViewRef | null>
+) {
   const { scrollFor, saveScroll } = useHighlights();
   const [ready, setReady] = useState(false);
-
-  // Read once: injectedJavaScript only runs on the first load, and a prop that
-  // changed on every render would only be noise.
-  const [injectedJavaScript] = useState(() =>
-    buildRestoreScript(scrollFor(documentId))
-  );
 
   // Positions are only recorded after the restore. Before it, the page sits at
   // the top, and iOS can report that during layout — leaving right then would
   // otherwise overwrite the saved position with 0.
   const restored = useRef(false);
-  const fallback = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  useEffect(() => () => clearTimeout(fallback.current), []);
 
-  const reveal = useCallback(() => {
-    clearTimeout(fallback.current);
-    restored.current = true;
-    setReady(true);
-  }, []);
+  useEffect(() => {
+    let active = true;
+    const reveal = () => {
+      if (active) {
+        restored.current = true;
+        setReady(true);
+      }
+    };
+
+    const view = viewRef.current;
+    if (!view) {
+      reveal();
+      return;
+    }
+
+    const fraction = clampFraction(scrollFor(documentId));
+    // Queued by the view until the page has loaded. It waits for web fonts
+    // first: the readers use Google Fonts with `display=swap`, so scrolling
+    // before they arrive lands on a layout about to reflow, and drifts.
+    view
+      .evaluateJavaScript(
+        `
+        if (document.fonts) await document.fonts.ready;
+        const max = document.documentElement.scrollHeight - window.innerHeight;
+        if (max > 0) window.scrollTo(0, ${fraction} * max);
+        `,
+        { timeout: RESTORE_TIMEOUT_MS }
+      )
+      // A failed or slow restore still has to reveal the page.
+      .catch(() => {})
+      .finally(reveal);
+
+    return () => {
+      active = false;
+    };
+  }, [documentId, scrollFor, viewRef]);
 
   const onScroll = useCallback<ScrollHandler>(
     (event) => {
@@ -97,31 +99,5 @@ export function useScrollRestore(documentId: string) {
     [documentId, saveScroll]
   );
 
-  const onMessage = useCallback<MessageHandler>(
-    (event) => {
-      // Every bridge message comes through here as well; only ours matters.
-      try {
-        if (JSON.parse(event.nativeEvent.data)?.type === RESTORED_MESSAGE) {
-          reveal();
-        }
-      } catch {
-        // Not JSON, so not ours.
-      }
-    },
-    [reveal]
-  );
-
-  const onLoadEnd = useCallback(() => {
-    if (!restored.current) {
-      fallback.current = setTimeout(reveal, RESTORE_FALLBACK_MS);
-    }
-  }, [reveal]);
-
-  return useMemo(
-    () => ({
-      ready,
-      webViewProps: { injectedJavaScript, onScroll, onMessage, onLoadEnd },
-    }),
-    [ready, injectedJavaScript, onScroll, onMessage, onLoadEnd]
-  );
+  return useMemo(() => ({ ready, onScroll }), [ready, onScroll]);
 }

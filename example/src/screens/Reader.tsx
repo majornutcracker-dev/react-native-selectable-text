@@ -22,10 +22,12 @@ import { HighlighterFab } from "@/components/HighlighterFab";
 import { HighlightMenu } from "@/components/HighlightMenu";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { NotesBottomSheet } from "@/components/NotesBottomSheet";
+import { SearchBar, SearchGlyph } from "@/components/SearchBar";
 import { useToastNotification } from "@/context/ToastNotificationProvider";
 import { useHighlights } from "@/context/HighlightsProvider";
 import { useHighlightOverlay } from "@/hooks/useHighlightOverlay";
 import { useScrollRestore } from "@/hooks/useScrollRestore";
+import { useDocumentSearch } from "@/hooks/useDocumentSearch";
 import {
   HIGHLIGHT_EXIT_CLASS,
   HIGHLIGHT_EXIT_MS,
@@ -45,7 +47,14 @@ export default function Reader(props: { documentId: string }) {
   const [currentHighlighterName, setCurrentHighlighterName] =
     useState<HighlighterName>(highlighters[0].name);
   // Puts the reader back where it was left; `ready` once that has happened.
-  const scroll = useScrollRestore(doc.id);
+  const scroll = useScrollRestore(doc.id, viewRef);
+  const search = useDocumentSearch(viewRef);
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const closeSearch = useCallback(() => {
+    search.reset();
+    setSearchOpen(false);
+  }, [search]);
   // The WebView's own box: the frame onHighlightPressed reports against.
   const [contentBounds, setContentBounds] = useState({ width: 0, height: 0 });
   const {
@@ -84,34 +93,58 @@ export default function Reader(props: { documentId: string }) {
         >
           <Text style={styles.backText}>←</Text>
         </Pressable>
-        <View style={styles.headerText}>
-          <Text style={[styles.headerKicker, { color: doc.accent }]}>
-            {doc.kicker}
-          </Text>
-          <Text style={styles.headerTitle} numberOfLines={1}>
-            {doc.title}
-          </Text>
-        </View>
-        <Pressable
-          onPress={async () => {
-            try {
-              const data = await viewRef.current?.getAllHighlightsData();
-              router.push({
-                pathname: "/highlights",
-                params: { data: JSON.stringify(data ?? []) },
-              });
-            } catch (error) {
-              showToast(
-                error instanceof Error ? error.message : "Unknown error"
-              );
-            }
-          }}
-          style={[styles.counter, { backgroundColor: doc.accentDim }]}
-        >
-          <Text style={[styles.counterText, { color: doc.accent }]}>
-            {count}
-          </Text>
-        </Pressable>
+        {searchOpen ? (
+          <SearchBar
+            query={search.query}
+            onChangeQuery={search.setQuery}
+            searching={search.searching}
+            total={search.total}
+            index={search.index}
+            accent={doc.accent}
+            onNext={search.next}
+            onPrevious={search.previous}
+            onClose={closeSearch}
+          />
+        ) : (
+          <>
+            <View style={styles.headerText}>
+              <Text style={[styles.headerKicker, { color: doc.accent }]}>
+                {doc.kicker}
+              </Text>
+              <Text style={styles.headerTitle} numberOfLines={1}>
+                {doc.title}
+              </Text>
+            </View>
+            <Pressable
+              onPress={() => setSearchOpen(true)}
+              hitSlop={8}
+              accessibilityLabel="Search in this document"
+              style={styles.iconButton}
+            >
+              <SearchGlyph color={theme.color.text} />
+            </Pressable>
+            <Pressable
+              onPress={async () => {
+                try {
+                  const data = await viewRef.current?.getAllHighlightsData();
+                  router.push({
+                    pathname: "/highlights",
+                    params: { data: JSON.stringify(data ?? []) },
+                  });
+                } catch (error) {
+                  showToast(
+                    error instanceof Error ? error.message : "Unknown error"
+                  );
+                }
+              }}
+              style={[styles.counter, { backgroundColor: doc.accentDim }]}
+            >
+              <Text style={[styles.counterText, { color: doc.accent }]}>
+                {count}
+              </Text>
+            </Pressable>
+          </>
+        )}
       </View>
 
       <View
@@ -121,7 +154,7 @@ export default function Reader(props: { documentId: string }) {
         <SelectableTextView
           ref={viewRef}
           webViewProps={{
-            ...scroll.webViewProps,
+            onScroll: scroll.onScroll,
             style: [styles.webview, { backgroundColor: doc.background }],
             menuItems: [
               { key: "highlight", label: "Highlight" },
@@ -262,6 +295,14 @@ const styles = StyleSheet.create({
     backgroundColor: theme.color.bgElevated,
   },
   backText: { color: theme.color.text, fontSize: 18, lineHeight: 20 },
+  iconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: theme.color.bgElevated,
+  },
   headerText: { flex: 1 },
   headerKicker: {
     fontSize: theme.font.size.xs,
