@@ -28,7 +28,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: yarn
-          registry-url: https://registry.npmjs.org
 
       - name: Resolve tag and package version
         id: version
@@ -70,6 +69,15 @@ jobs:
       - run: yarn lint
       - run: yarn test
       - run: yarn typecheck
+
+      # `registry-url` writes an .npmrc that reads ${NODE_AUTH_TOKEN}, which only
+      # the Publish step defines. Yarn 1 aborts on an undefined variable in that
+      # file, so this has to come after every yarn command.
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
       # `prepublishOnly` (expo-module prepublishOnly) builds the package first.
       - name: Publish
