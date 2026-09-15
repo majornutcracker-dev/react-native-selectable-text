@@ -389,6 +389,52 @@ export type SelectableTextViewRef = {
    * @returns The new visibility state (`true` if visible, `false` if hidden)
    */
   toggleHighlightsVisibility: () => Promise<boolean>;
+  /**
+   * Runs `script` inside the WebView page and resolves with what it returns.
+   *
+   * The script is the body of an async function: it can `await`, and a
+   * `return` value becomes the result. That result crosses the bridge as JSON,
+   * so it must be JSON-serializable. A syntax error, a thrown error, or an
+   * unserializable result rejects the promise with the page's message.
+   *
+   * This is the escape hatch for anything the ref does not cover. The page is
+   * yours, so the script can do anything page code can — see "Bridging custom
+   * actions" in the reference.
+   * @param script The body of an async function, e.g. `return window.scrollY;`.
+   * @throws js Error
+   */
+  evaluateJavaScript: <T = unknown>(
+    script: string,
+    options?: EvaluateJavaScriptOptions
+  ) => Promise<T>;
+};
+
+/**
+ * Options for {@link SelectableTextViewRef.evaluateJavaScript}.
+ */
+export type EvaluateJavaScriptOptions = {
+  /**
+   * How long to wait for the script to settle, in milliseconds.
+   *
+   * The clock starts when the call is made. A call made before the page has
+   * loaded is queued until it has, and that wait counts against the timeout —
+   * so a script run on mount that also awaits something (web fonts, say) needs
+   * a timeout covering both.
+   *
+   * @default 2000
+   */
+  timeout?: number;
+};
+
+/**
+ * A message a script in the page sent with
+ * `window.SelectableText.postMessage(type, data)`.
+ */
+export type CustomMessage = {
+  /** The name the page gave the message. */
+  type: string;
+  /** What the page sent along, after a JSON round trip. */
+  data: unknown;
 };
 
 export type SelectableTextViewPropsBase = {
@@ -497,6 +543,16 @@ export type SelectableTextViewPropsBase = {
    * @param visibilityState
    */
   onHighlightsVisibilityStateChange?: (visibilityState: boolean) => void;
+  /**
+   * Called when a script in the page sends a message with
+   * `window.SelectableText.postMessage(type, data)`.
+   *
+   * Only those messages arrive here, never the module's own traffic — unlike
+   * `webViewProps.onMessage`, which sees everything and has to tell the two
+   * apart. See "Bridging custom actions" in the reference.
+   * @param message The `type` and `data` the page sent.
+   */
+  onCustomMessage?: (message: CustomMessage) => void;
 };
 
 export type Message = {
@@ -522,6 +578,7 @@ export const BridgingNames = {
     onError: "onError",
     onHighlightPressed: "onHighlightPressed",
     onHighlightsVisibilityStateChange: "onHighlightsVisibilityStateChange",
+    onCustomMessage: "onCustomMessage",
     // dev
     log: "log",
   },
@@ -532,6 +589,7 @@ export const BridgingNames = {
     getAllHighlightsData: "getAllHighlightsData",
     getHighlightsVisibilityState: "getHighlightsVisibilityState",
     toggleHighlightsVisibility: "toggleHighlightsVisibility",
+    evaluateJavaScript: "evaluateJavaScript",
   },
 };
 

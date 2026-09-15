@@ -30,6 +30,7 @@ This page is the full surface. For a quick start see the
 | `onError(error)`                             | The WebView SDK reports an error: `{ code, message, details }`. Try highlighting over an existing highlight for `overlapping_highlight`, or with no selection for `empty_selection`. |
 | `onHighlightPressed(highlight)`              | A highlight is tapped. Receives `{ id, name, text, rect, rects }`. Return a `className` to style the pressed highlight (define it in `css`), or return nothing to leave it unstyled. |
 | `onHighlightsVisibilityStateChange(visible)` | Highlight visibility changes. Receives `true` when visible, `false` when hidden.                                                                                                     |
+| `onCustomMessage(message)`                   | A script in the page calls `window.SelectableText.postMessage(type, data)`. Receives `{ type, data }`. See [Bridging custom actions](#bridging-custom-actions).                      |
 
 A callback that throws is caught and logged rather than crashing the bridge, so
 a bug in your handler will not take the component down with it.
@@ -207,10 +208,17 @@ ref.current?.focusHighlight(id, "focused", { scroll: false });
 > is already looking at what they tapped. Call `focusHighlight(id, className?)`
 > when you also want the content scrolled to the highlight.
 
-Promise-returning methods reject after a 2 second timeout, and reject with
-`"Component unmounted"` if the view goes away while a call is in flight. Calls
-made before the WebView finishes loading are queued and flushed on load rather
-than dropped.
+### Running your own script
+
+- **`evaluateJavaScript<T>(script, options?): Promise<T>`** — runs `script` in
+  the page and resolves with what it returns. This is the escape hatch for
+  anything the ref does not cover; see
+  [Bridging custom actions](#bridging-custom-actions).
+
+Promise-returning methods reject after a 2 second timeout (`evaluateJavaScript`
+accepts its own), and reject with `"Component unmounted"` if the view goes away
+while a call is in flight. Calls made before the WebView finishes loading are
+queued and flushed on load rather than dropped.
 
 ## Highlighters
 
@@ -404,6 +412,116 @@ The possible `code` values are:
 | `failed_to_focus_highlight`                                        | Focusing a highlight failed.                                                                               |
 | `selection_changed`                                                | The selection moved while an async validation ran, so the highlight was refused.                           |
 | `unknown`                                                          | An error that does not match any of the above.                                                             |
+
+## Bridging custom actions
+
+The ref and the callbacks cover highlighting. Anything else — reading or setting
+the scroll position, reacting to a button inside your own HTML, measuring an
+element — goes through a two-way bridge, so you never need the WebView itself.
+
+| Direction           | Use                                                                 |
+| ------------------- | ------------------------------------------------------------------- |
+| React Native → page | `ref.current.evaluateJavaScript(script, options?)`                  |
+| Page → React Native | `window.SelectableText.postMessage(type, data)` + `onCustomMessage` |
+
+### React Native → page: `evaluateJavaScript`
+
+`script` is the body of an async function: it can `await`, and whatever it
+`return`s becomes the resolved value.
+
+```ts
+const heading = await ref.current?.evaluateJavaScript<string>(
+  "return document.querySelector('h1')?.textContent ?? '';"
+);
+```
+
+- **The result crosses as JSON.** Return plain data. A DOM node, a function, or
+  a circular structure rejects the promise with a message saying so.
+- **Failures reject.** A syntax error or an error the script throws rejects with
+  the page's own message.
+- **Calls are queued until the page has loaded**, so calling on mount is safe.
+- **`timeout`** defaults to 2 seconds and counts from the call, _including_ the
+  time spent waiting for the page to load. A script that also awaits something
+  needs a timeout that covers both.
+- **A value you interpolate into the script is code, not data.** Pass numbers
+  through `Number()` and anything else through `JSON.stringify()`, so a value
+  can never end the expression it sits in.
+
+#### Example: restoring a scroll position
+
+Text reflows when web fonts arrive, so wait for them before scrolling. Capturing
+the position needs no bridge at all: `webViewProps.onScroll` already reports
+`contentOffset`, `contentSize`, and `layoutMeasurement`.
+
+```tsx
+useEffect(() => {
+  const view = ref.current;
+  if (!view) return;
+  const fraction = Number(savedFraction) || 0;
+
+  view
+    .evaluateJavaScript(
+      `
+      if (document.fonts) await document.fonts.ready;
+      const max = document.documentElement.scrollHeight - window.innerHeight;
+      if (max > 0) window.scrollTo(0, ${fraction} * max);
+      `,
+      { timeout: 6000 }
+    )
+    .catch(() => {}) // a slow or failed restore must still show the page
+    .finally(() => setReady(true));
+}, []);
+```
+
+The [example app](../example) does exactly this, in `useScrollRestore`.
+
+### Page → React Native: `window.SelectableText.postMessage`
+
+Every page gets `window.SelectableText`. It is defined in `<head>`, so a script
+inside your `content` can use it the moment it runs:
+
+```tsx
+<SelectableTextView
+  ref={ref}
+  content={`
+    <article>…</article>
+    <button id="share" data-title="The Anatomy of Attention">Share</button>
+    <script>
+      document.getElementById("share").addEventListener("click", function (e) {
+        window.SelectableText.postMessage("share", {
+          title: e.currentTarget.dataset.title,
+        });
+      });
+    </script>
+  `}
+  onCustomMessage={({ type, data }) => {
+    if (type === "share") {
+      Share.share({ message: String((data as { title?: string }).title) });
+    }
+  }}
+/>
+```
+
+- `type` must be a non-empty string and `data` JSON-serializable. Getting either
+  wrong throws inside the page, where your web inspector shows it.
+- `onCustomMessage` only ever receives these messages. `webViewProps.onMessage`
+  receives them too, but mixed in with the module's own traffic.
+- **Treat `data` as untrusted.** Any script in the page can call `postMessage`,
+  including one that arrived as part of `content`. Validate it before acting on
+  it.
+
+### Which one to use
+
+- The action starts **in React Native** — on mount, from a native button:
+  `evaluateJavaScript`.
+- The action starts **in the page** — a tap, an observer, a timer in your HTML:
+  `postMessage` with `onCustomMessage`.
+- Code that must run **on every load, before the content**:
+  `webViewProps.injectedJavaScriptBeforeContentLoaded`, which is not part of the
+  bridge.
+
+The module's internal globals (`window.__MNST__`, `rangy`) are not part of the
+API and can change in any release. Build on the bridge instead.
 
 ## Security note
 

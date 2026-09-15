@@ -13,6 +13,7 @@ import {
   type SelectionActionOptions,
   type FocusHighlightOptions,
   type UnhighlightOptions,
+  type EvaluateJavaScriptOptions,
 } from "./types";
 import { generatePromiseId, htmlContent } from "./utils";
 import { Linking, Platform } from "react-native";
@@ -52,6 +53,7 @@ const SelectableTextView = React.forwardRef<
     onError,
     onHighlightPressed,
     onHighlightsVisibilityStateChange,
+    onCustomMessage,
     webViewProps,
   } = props;
   const promises = React.useRef<Record<string, PendingPromise>>({});
@@ -238,6 +240,25 @@ const SelectableTextView = React.forwardRef<
           data.type === BridgingNames.events.onHighlightsVisibilityStateChange
         ) {
           onHighlightsVisibilityStateChange?.(data.value as boolean);
+        } else if (data.type === BridgingNames.promises.evaluateJavaScript) {
+          const id = data.value.promiseId;
+          if (data.value.success) {
+            promises.current[id]?.resolve(data.value.result);
+          } else {
+            promises.current[id]?.reject(
+              new Error(
+                data.value.error ?? "Unknown error while evaluating JavaScript"
+              )
+            );
+          }
+          settlePromise(id);
+        } else if (data.type === BridgingNames.events.onCustomMessage) {
+          // Any script in the page can post this type, so only a well-formed
+          // message is passed on.
+          const message = data.value;
+          if (typeof message?.type === "string") {
+            onCustomMessage?.({ type: message.type, data: message.data });
+          }
         }
       } catch (error) {
         // A consumer callback threw or rejected. This handler is async, so
@@ -255,6 +276,7 @@ const SelectableTextView = React.forwardRef<
       onError,
       onHighlightsVisibilityStateChange,
       onHighlightPressed,
+      onCustomMessage,
       webViewProps?.onMessage,
     ]
   );
@@ -398,18 +420,26 @@ const SelectableTextView = React.forwardRef<
     });
   };
 
-  const _request = <T,>(type: string) =>
+  /**
+   * Sends a request the page answers under the same id. Most requests carry
+   * nothing but that id; `value` builds a richer payload around it when one is
+   * needed.
+   */
+  const _request = <T,>(
+    type: string,
+    options: { value?: (id: string) => unknown; timeout?: number } = {}
+  ) =>
     new Promise<T>((resolve, reject) => {
       const id = generatePromiseId();
       const entry: PendingPromise = { resolve, reject };
       promises.current[id] = entry;
-      _postMessage({ type, value: id });
+      _postMessage({ type, value: options.value ? options.value(id) : id });
       entry.timer = setTimeout(() => {
         if (promises.current[id] === entry) {
           entry.reject(new Error("Timeout"));
           settlePromise(id);
         }
-      }, PROMISE_TIMEOUT_MS);
+      }, options.timeout ?? PROMISE_TIMEOUT_MS);
     });
 
   const getSelectedText = () =>
@@ -426,6 +456,22 @@ const SelectableTextView = React.forwardRef<
 
   const toggleHighlightsVisibility = () =>
     _request<boolean>(BridgingNames.promises.toggleHighlightsVisibility);
+
+  const evaluateJavaScript = <T,>(
+    script: string,
+    options?: EvaluateJavaScriptOptions
+  ) =>
+    _request<T>(BridgingNames.promises.evaluateJavaScript, {
+      value: (promiseId) => ({ promiseId, script }),
+      // A timeout that is not a positive finite number would either fire at
+      // once or never; neither is what the caller meant, so use the default.
+      timeout:
+        typeof options?.timeout === "number" &&
+        Number.isFinite(options.timeout) &&
+        options.timeout > 0
+          ? options.timeout
+          : PROMISE_TIMEOUT_MS,
+    });
 
   const _postMessage = (message: Message) => {
     if (!isWebViewReady.current) {
@@ -461,6 +507,7 @@ const SelectableTextView = React.forwardRef<
     getAllHighlightsData,
     getHighlightsVisibilityState,
     toggleHighlightsVisibility,
+    evaluateJavaScript,
   }));
 
   return (

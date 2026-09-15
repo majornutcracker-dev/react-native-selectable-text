@@ -15,7 +15,9 @@ import {
   fontsToHeadMarkup,
   generatePromiseId,
   htmlContent,
+  customBridgeScript,
 } from "../utils";
+import { BridgingNames } from "../types";
 import type { AnimationOptions, Highlighter } from "../types";
 
 describe("toCssLength", () => {
@@ -1069,5 +1071,143 @@ describe("entrance animations", () => {
     setExitClass({ getHighlightElements: () => [el] }, "exit", true);
     expect(el.set.has(ENTERING_CLASS)).toBe(false);
     expect(el.set.has("exit")).toBe(true);
+  });
+});
+
+describe("bridging custom actions (page side)", () => {
+  const html = htmlContent({
+    hl: undefined,
+    h: undefined,
+    c: "<p>hi</p>",
+    css: undefined,
+    f: undefined,
+    ho: undefined,
+    p: "ios",
+    o: undefined,
+  });
+
+  const flush = () => new Promise((resolve) => setTimeout(resolve, 20));
+
+  function loadEvaluate() {
+    const posted: { type: string; value: any }[] = [];
+    const source = ["sendEvaluateJavaScript", "evaluateJavaScript"]
+      .map(injectedFunctionSource)
+      .join("\n");
+    const evaluate = new Function(
+      "postMessage",
+      "BridgingNames",
+      `${source}; return evaluateJavaScript;`
+    )(
+      (type: string, value: unknown) =>
+        posted.push({ type, value: value as any }),
+      BridgingNames
+    ) as (request: { promiseId: string; script: string }) => void;
+    return { evaluate, posted };
+  }
+
+  it("resolves with what the script returns", async () => {
+    const { evaluate, posted } = loadEvaluate();
+    evaluate({ promiseId: "p1", script: "return 21 * 2;" });
+    await flush();
+    expect(posted).toEqual([
+      {
+        type: BridgingNames.promises.evaluateJavaScript,
+        value: { promiseId: "p1", success: true, result: 42, error: undefined },
+      },
+    ]);
+  });
+
+  it("lets the script await before returning", async () => {
+    const { evaluate, posted } = loadEvaluate();
+    evaluate({
+      promiseId: "p1",
+      script: "await new Promise((r) => setTimeout(r, 5)); return 'done';",
+    });
+    await flush();
+    expect(posted[0].value).toMatchObject({ success: true, result: "done" });
+  });
+
+  it("reports a syntax error instead of throwing", async () => {
+    const { evaluate, posted } = loadEvaluate();
+    expect(() =>
+      evaluate({ promiseId: "p1", script: "return (" })
+    ).not.toThrow();
+    await flush();
+    expect(posted[0].value.success).toBe(false);
+    expect(posted[0].value.error).toEqual(expect.any(String));
+  });
+
+  it("reports an error the script throws", async () => {
+    const { evaluate, posted } = loadEvaluate();
+    evaluate({ promiseId: "p1", script: "throw new Error('boom');" });
+    await flush();
+    expect(posted[0].value).toMatchObject({ success: false, error: "boom" });
+  });
+
+  it("rejects a result that cannot cross the bridge as JSON", async () => {
+    const { evaluate, posted } = loadEvaluate();
+    evaluate({
+      promiseId: "p1",
+      script: "const a = {}; a.self = a; return a;",
+    });
+    await flush();
+    expect(posted[0].value.success).toBe(false);
+    expect(posted[0].value.error).toContain("not JSON-serializable");
+  });
+
+  function loadBridge(win: Record<string, any>) {
+    new Function("window", customBridgeScript())(win);
+    return win.SelectableText as {
+      postMessage: (type: unknown, data?: unknown) => void;
+    };
+  }
+
+  it("posts a page message under the module's custom message type", () => {
+    const sent: string[] = [];
+    const bridge = loadBridge({
+      ReactNativeWebView: { postMessage: (m: string) => sent.push(m) },
+    });
+    bridge.postMessage("ping", { n: 1 });
+    expect(JSON.parse(sent[0])).toEqual({
+      type: BridgingNames.events.onCustomMessage,
+      value: { type: "ping", data: { n: 1 } },
+    });
+  });
+
+  it("throws on a missing type or unserializable data", () => {
+    const bridge = loadBridge({ ReactNativeWebView: { postMessage() {} } });
+    expect(() => bridge.postMessage("")).toThrow(TypeError);
+    expect(() => bridge.postMessage(42)).toThrow(TypeError);
+    const circular: Record<string, unknown> = {};
+    circular.self = circular;
+    expect(() => bridge.postMessage("x", circular)).toThrow(
+      "JSON-serializable"
+    );
+  });
+
+  it("does nothing outside a WebView instead of throwing", () => {
+    const bridge = loadBridge({});
+    expect(() => bridge.postMessage("ping")).not.toThrow();
+  });
+
+  it("is frozen, so page scripts cannot swap it out", () => {
+    const win: Record<string, any> = {};
+    loadBridge(win);
+    expect(Object.isFrozen(win.SelectableText)).toBe(true);
+  });
+
+  it("is defined in <head>, before the content can run", () => {
+    expect(html.indexOf("window.SelectableText")).toBeGreaterThan(-1);
+    expect(html.indexOf("window.SelectableText")).toBeLessThan(
+      html.indexOf("<body>")
+    );
+  });
+
+  it("injects BridgingNames from the TypeScript constant", () => {
+    const marker = "const BridgingNames = ";
+    const start = html.indexOf(marker) + marker.length;
+    const literal = html.slice(start, html.indexOf(";", start));
+    // Hand-copied names could drift from the RN side without anything failing.
+    expect(JSON.parse(literal)).toEqual(BridgingNames);
   });
 });

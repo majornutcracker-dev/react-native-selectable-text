@@ -640,3 +640,110 @@ describe("highlights prop echo suppression", () => {
     ]);
   });
 });
+
+describe("bridging custom actions", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
+  });
+
+  it("posts the script and resolves with its result", async () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = ref.current!.evaluateJavaScript("return 1 + 1;");
+    });
+    const posted = lastPosted();
+    expect(posted.type).toBe(BridgingNames.promises.evaluateJavaScript);
+    expect(posted.value.script).toBe("return 1 + 1;");
+
+    await fireMessage(BridgingNames.promises.evaluateJavaScript, {
+      success: true,
+      promiseId: posted.value.promiseId,
+      result: 2,
+    });
+    await expect(pending).resolves.toBe(2);
+  });
+
+  it("rejects with the error the page reported", async () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = ref.current!.evaluateJavaScript("throw new Error('boom');");
+    });
+    const assertion = expect(pending).rejects.toThrow("boom");
+    await fireMessage(BridgingNames.promises.evaluateJavaScript, {
+      success: false,
+      promiseId: lastPosted().value.promiseId,
+      error: "boom",
+    });
+    await assertion;
+  });
+
+  it("waits for as long as the timeout it was given", async () => {
+    const ref = renderComponent();
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = ref.current!.evaluateJavaScript("return 1;", { timeout: 5000 });
+    });
+    const settled = jest.fn();
+    pending.then(settled, settled);
+
+    // Past the 2s default, still waiting.
+    act(() => {
+      jest.advanceTimersByTime(4999);
+    });
+    await act(async () => {});
+    expect(settled).not.toHaveBeenCalled();
+
+    act(() => {
+      jest.advanceTimersByTime(1);
+    });
+    await expect(pending).rejects.toThrow("Timeout");
+  });
+
+  it("falls back to the default timeout for a nonsensical one", async () => {
+    const ref = renderComponent();
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = ref.current!.evaluateJavaScript("return 1;", { timeout: -1 });
+    });
+    const assertion = expect(pending).rejects.toThrow("Timeout");
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+    await assertion;
+  });
+
+  it("passes a page's custom message on to onCustomMessage", async () => {
+    const onCustomMessage = jest.fn();
+    renderComponent({ onCustomMessage });
+    await fireMessage(BridgingNames.events.onCustomMessage, {
+      type: "ping",
+      data: { n: 1 },
+    });
+    expect(onCustomMessage).toHaveBeenCalledWith({
+      type: "ping",
+      data: { n: 1 },
+    });
+  });
+
+  it("drops a custom message that has no type", async () => {
+    const onCustomMessage = jest.fn();
+    renderComponent({ onCustomMessage });
+    await fireMessage(BridgingNames.events.onCustomMessage, { data: 1 });
+    expect(onCustomMessage).not.toHaveBeenCalled();
+  });
+
+  it("never hands the module's own messages to onCustomMessage", async () => {
+    const onCustomMessage = jest.fn();
+    renderComponent({ onCustomMessage });
+    await fireMessage(BridgingNames.events.onTextSelectionChange, "x");
+    expect(onCustomMessage).not.toHaveBeenCalled();
+  });
+});

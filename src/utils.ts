@@ -6,6 +6,7 @@ import {
   serializer,
   textRange,
 } from "./rangy@1.3.2";
+import { BridgingNames } from "./types";
 import type {
   Highlighter,
   AnimationOptions,
@@ -284,6 +285,47 @@ export function toCssLength(
 }
 
 /**
+ * The page-side half of the custom-message bridge: `window.SelectableText`.
+ *
+ * It is emitted in `<head>` because it has to exist before `content` runs. The
+ * module's own script sits after the content in `<body>`, so a script in the
+ * content sending a message while the page is still being parsed would find
+ * nothing there. It posts under a single bridge type of its own, which is what
+ * keeps consumer messages from ever being read as the module's.
+ */
+export function customBridgeScript(): string {
+  return `
+(function () {
+  var MESSAGE_TYPE = ${toScriptLiteral(BridgingNames.events.onCustomMessage)};
+  function postMessage(type, data) {
+    if (typeof type !== "string" || type === "") {
+      throw new TypeError(
+        "SelectableText.postMessage: type must be a non-empty string"
+      );
+    }
+    var message;
+    try {
+      message = JSON.stringify({
+        type: MESSAGE_TYPE,
+        value: { type: type, data: data },
+      });
+    } catch (e) {
+      throw new TypeError(
+        "SelectableText.postMessage: data must be JSON-serializable (" +
+          (e && e.message) +
+          ")"
+      );
+    }
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(message);
+    }
+  }
+  window.SelectableText = Object.freeze({ postMessage: postMessage });
+})();
+`;
+}
+
+/**
  * State class carried by a highlight while its entrance animation plays. The
  * WebView runtime adds it when a highlight is created or restored and drops it
  * as soon as that animation ends or is interrupted.
@@ -463,6 +505,9 @@ export const htmlContent = ({
       name="viewport"
       content="width=device-width, initial-scale=${options.initialScale}, maximum-scale=${options.maximumScale}, user-scalable=${options.userScalable ? "yes" : "no"}"
     />
+    <script>
+      ${customBridgeScript()}
+    </script>
     ${fontsHeadMarkup}
     <style>
       ${fontsCSS}
@@ -569,36 +614,9 @@ export const htmlContent = ({
 
       // <------------------------------ Bridging ----------------------------------->
 
-      const BridgingNames = {
-        // in
-        functions: {
-          updateHighlights: "updateHighlights",
-          highlightSelection: "highlightSelection",
-          unhighlightSelection: "unhighlightSelection",
-          clearHighlights: "clearHighlights",
-          focusHighlight: "focusHighlight",
-          unfocusHighlight: "unfocusHighlight",
-          unhighlightById: "unhighlightById",
-        },
-        // out
-        events: {
-          onTextSelectionChange: "onTextSelectionChange",
-          onHighlightsChange: "onHighlightsChange",
-          onError: "onError",
-          onHighlightPressed: "onHighlightPressed",
-          onHighlightsVisibilityStateChange: "onHighlightsVisibilityStateChange",
-          // dev
-          log: "log",
-        },
-        // in - out
-        promises: {
-          getSelectedText: "getSelectedText",
-          getHighlights: "getHighlights",
-          getAllHighlightsData: "getAllHighlightsData",
-          getHighlightsVisibilityState: "getHighlightsVisibilityState",
-          toggleHighlightsVisibility: "toggleHighlightsVisibility",
-        },
-      };
+      // Interpolated from the TypeScript constant, so the two sides of the
+      // bridge cannot disagree about a message name.
+      const BridgingNames = ${toScriptLiteral(BridgingNames)};
 
       // @native-receiver
       function onMessage(type, value) {
@@ -631,6 +649,8 @@ export const htmlContent = ({
           getHighlightsVisibilityState(value); // promiseId
         } else if (type === BridgingNames.promises.toggleHighlightsVisibility) {
           toggleHighlightsVisibility(value); // promiseId
+        } else if (type === BridgingNames.promises.evaluateJavaScript) {
+          evaluateJavaScript(value); // { promiseId, script }
         } else {
           sendOnError(
             "bridge_message_error",
@@ -808,6 +828,55 @@ export const htmlContent = ({
       }
 
       // @native-promise-resolve
+      // @native-promise-resolve
+      function sendEvaluateJavaScript(promiseId, success, result, error) {
+        postMessage(BridgingNames.promises.evaluateJavaScript, {
+          promiseId,
+          success,
+          result,
+          error,
+        });
+      }
+
+      // Runs a consumer script as the body of an async function, so it can
+      // await and return a value. Every failure is reported through the promise
+      // rather than thrown: nothing on this side is listening for a throw.
+      // @native-promise
+      function evaluateJavaScript(request) {
+        const promiseId = request && request.promiseId;
+        const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
+        let run;
+        try {
+          run = new AsyncFunction(String(request && request.script));
+        } catch (e) {
+          // A syntax error surfaces here, before any of the script has run.
+          sendEvaluateJavaScript(promiseId, false, undefined, e?.message ?? String(e));
+          return;
+        }
+        run().then(
+          (result) => {
+            // The result crosses as JSON. Checked here so an unserializable one
+            // rejects with a reason, instead of failing inside postMessage and
+            // leaving the caller to time out.
+            try {
+              JSON.stringify(result);
+            } catch (e) {
+              sendEvaluateJavaScript(
+                promiseId,
+                false,
+                undefined,
+                "The script's result is not JSON-serializable: " + (e?.message ?? String(e))
+              );
+              return;
+            }
+            sendEvaluateJavaScript(promiseId, true, result, undefined);
+          },
+          (e) => {
+            sendEvaluateJavaScript(promiseId, false, undefined, e?.message ?? String(e));
+          }
+        );
+      }
+
       function sendToggleHighlightsVisibility(promiseId, success, visible, error) {
         postMessage(BridgingNames.promises.toggleHighlightsVisibility, {
           promiseId,
