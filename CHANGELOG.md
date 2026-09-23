@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The native module is now optional, so importing the package no longer throws
+  where that module is not in the binary — Expo Go and Snack among them, which
+  already bundle `react-native-webview`. `SelectableTextView` never reads it,
+  so the component works there; the default export is `null` in those
+  environments.
+
 ## [1.0.0] - 2026-09-14
 
 Initial release.
