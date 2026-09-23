@@ -4,13 +4,22 @@ const path = require("path");
 
 const config = getDefaultConfig(__dirname);
 
-// npm v7+ will install ../node_modules/react and ../node_modules/react-native because of peerDependencies.
-// To prevent the incompatible react-native between ./node_modules/react-native and ../node_modules/react-native,
-// excludes the one from the parent folder when bundling.
+const root = path.resolve(__dirname, "..");
+const { peerDependencies } = require(path.join(root, "package.json"));
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// The library's peer dependencies are also installed in ../node_modules as dev dependencies.
+// ../src must resolve them to this app's copies, otherwise Metro bundles them twice. A second
+// `expo` is the worst case: its Expo.fx re-registers "main" as AppEntryNotFound once the library
+// loads, so the next Activity recreation (e.g. a font size change) renders that error screen.
 config.resolver.blockList = [
   ...Array.from(config.resolver.blockList ?? []),
-  new RegExp(path.resolve("..", "node_modules", "react")),
-  new RegExp(path.resolve("..", "node_modules", "react-native")),
+  ...Object.keys(peerDependencies).map(
+    (name) =>
+      new RegExp(
+        `^${escapeRegExp(path.join(root, "node_modules", name))}[\\\\/]`
+      )
+  ),
 ];
 
 config.resolver.nodeModulesPaths = [
