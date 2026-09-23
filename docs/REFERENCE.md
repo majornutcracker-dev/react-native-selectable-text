@@ -9,16 +9,16 @@ This page is the full surface. For a quick start see the
 
 ## Props
 
-| Prop                 | Description                                                                                                                                                                                                                                                               |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `content`            | The HTML string rendered inside the WebView. Changing it does **not** re-render — remount the component to show new content.                                                                                                                                              |
-| `css`                | Injected styles for layout and typography. Declared after the generated highlighter classes, so your rules win on equal specificity and can restyle or re-animate a highlight.                                                                                            |
-| `fonts`              | WebView font setup via `googleFonts()`, `mergeFonts()`, or custom `preconnect`, `stylesheets`, and `@font-face` rules. Multiple families are supported in a single config.                                                                                                |
-| `highlighters`       | Named highlight classes. A name must be a valid CSS class name — letters, digits, `-` and `_`, not starting with a digit — and invalid names are dropped with a console warning.                                                                                          |
-| `highlights`         | **State prop.** Serialized highlights to restore. `undefined` leaves the current highlights untouched; an empty string clears them. Obtain the value from `getHighlights()` or `onHighlightsChange`. A value this view just emitted is ignored, so it is safe to control. |
-| `highlighterOptions` | `ignoredElements` — tags or selectors such as `a`, `sup`, `.ignored`. Ignored nodes skip the visible highlight but stay selectable and copyable.                                                                                                                          |
-| `options`            | Viewport zoom: `userScalable`, `initialScale`, `maximumScale`.                                                                                                                                                                                                            |
-| `webViewProps`       | Pass-through to `react-native-webview`. `javaScriptEnabled`, `source`, and `onShouldStartLoadWithRequest` are owned by the component and cannot be overridden.                                                                                                            |
+| Prop                 | Description                                                                                                                                                                                                                                                                              |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content`            | The HTML string rendered inside the WebView. Changing it does **not** re-render — remount the component to show new content.                                                                                                                                                             |
+| `css`                | Injected styles for layout and typography. Declared after the generated highlighter classes, so your rules win on equal specificity and can restyle or re-animate a highlight.                                                                                                           |
+| `fonts`              | WebView font setup via `googleFonts()`, `mergeFonts()`, or custom `preconnect`, `stylesheets`, and `@font-face` rules. Multiple families are supported in a single config.                                                                                                               |
+| `highlighters`       | Named highlight classes. A name must be a valid CSS class name — letters, digits, `-` and `_`, not starting with a digit — and invalid names are dropped with a console warning.                                                                                                         |
+| `highlights`         | **State prop.** Serialized highlights to restore. `undefined` leaves the current highlights untouched; an empty string clears them. Obtain the value from `getHighlights()` or `onHighlightsChange`. A value this view just emitted is ignored, so it is safe to control.                |
+| `highlighterOptions` | `ignoredElements` — tags or selectors such as `a`, `sup`, `.ignored`. Ignored nodes skip the visible highlight but stay selectable and copyable.                                                                                                                                         |
+| `options`            | Viewport zoom: `userScalable`, `initialScale`, `maximumScale`.                                                                                                                                                                                                                           |
+| `webViewProps`       | Pass-through to `react-native-webview`. `javaScriptEnabled`, `source`, and `onShouldStartLoadWithRequest` are owned by the component and cannot be overridden. `menuItems` and `onCustomMenuSelection` pass through untouched — see [Your own selection menu](#your-own-selection-menu). |
 
 ## Callbacks
 
@@ -219,6 +219,60 @@ Promise-returning methods reject after a 2 second timeout (`evaluateJavaScript`
 accepts its own), and reject with `"Component unmounted"` if the view goes away
 while a call is in flight. Calls made before the WebView finishes loading are
 queued and flushed on load rather than dropped.
+
+## Your own selection menu
+
+The menu that pops up over a selection is the WebView's, and
+`react-native-webview` already lets you replace its items. `webViewProps` passes
+`menuItems` and `onCustomMenuSelection` straight through, so the menu stays
+native on both platforms and the ref decides what each item does.
+
+```tsx
+const ref = React.useRef<SelectableTextViewRef>(null);
+
+<SelectableTextView
+  ref={ref}
+  content={html}
+  highlighters={highlighters}
+  webViewProps={{
+    menuItems: [
+      { key: "highlight", label: "Highlight" },
+      { key: "unhighlight", label: "Unhighlight" },
+      { key: "copy", label: "Copy" },
+    ],
+    onCustomMenuSelection: (event) => {
+      switch (event.nativeEvent.key) {
+        case "highlight":
+          ref.current?.highlightSelection("yellow");
+          break;
+        case "unhighlight":
+          ref.current?.unhighlightSelection();
+          break;
+        case "copy":
+          Clipboard.setString(event.nativeEvent.selectedText);
+          break;
+      }
+    },
+  }}
+/>;
+```
+
+The ref methods act on the **cached** selection, so the handler does not have to
+hand the text back; `event.nativeEvent.selectedText` is there for the cases that
+need the string itself — copying, sharing, translating, or asking a server
+whether the passage may be highlighted.
+
+An empty `menuItems` array suppresses the menu entirely, and `suppressMenuItems`
+(iOS) drops individual system items such as `lookup` or `share`.
+
+The selection is dropped once the action completes, which dismisses the iOS
+callout so a highlight's entrance animation is visible; pass
+`{ keepSelection: true }` to chain another action on the same text — see
+[`SelectionActionOptions`](#selectionactionoptions).
+
+[`example/src/screens/Reader.tsx`](https://github.com/majornutcracker-dev/react-native-selectable-text/blob/main/example/src/screens/Reader.tsx)
+wires this up with a validated variant as well, and lets you pick which
+highlighter the menu applies.
 
 ## Highlighters
 

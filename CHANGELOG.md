@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-23
+
+### Changed
+
+- The native module is now optional, so importing the package no longer throws
+  where that module is not in the binary — Expo Go and Snack among them, which
+  already bundle `react-native-webview`. `SelectableTextView` never reads it,
+  so the component works there; the default export is `null` in those
+  environments. Verified in Expo Go and in a prebuilt app, on iOS and Android.
+
+### Added
+
+- **Your own selection menu** in the API reference: `webViewProps.menuItems` and
+  `onCustomMenuSelection` reach `react-native-webview` untouched, so the native
+  menu can drive the ref's highlight methods.
+- The README opens with badges and an _Is this the right library?_ table.
+
 ## [1.0.0] - 2026-09-14
 
 Initial release.
@@ -31,5 +48,6 @@ Initial release.
 - Font helpers (`googleFonts()`, `mergeFonts()`), ignored elements, and viewport
   zoom options.
 
-[unreleased]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.0.0...HEAD
+[unreleased]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/majornutcracker-dev/react-native-selectable-text/releases/tag/v1.0.0

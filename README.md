@@ -1,10 +1,27 @@
 # @majornutcracker/react-native-selectable-text
 
+[![npm](https://img.shields.io/npm/v/@majornutcracker/react-native-selectable-text.svg)](https://www.npmjs.com/package/@majornutcracker/react-native-selectable-text)
+[![downloads](https://img.shields.io/npm/dw/@majornutcracker/react-native-selectable-text.svg)](https://www.npmjs.com/package/@majornutcracker/react-native-selectable-text)
+[![license](https://img.shields.io/npm/l/@majornutcracker/react-native-selectable-text.svg)](./LICENSE)
+![platforms](https://img.shields.io/badge/platforms-iOS%20%7C%20Android-lightgrey.svg)
+
 Expo module for **iOS and Android** built on `react-native-webview`. It renders
 HTML with advanced text selection, custom context menus, and persistent
 highlighting via [Rangy](https://github.com/timdown/rangy). Serialize, sync, restore selections and more
 
 Web is not supported.
+
+## Is this the right library?
+
+| You need                                                      | This module                                                                              |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Highlights that survive a remount, a restart, or a new device | **Yes** — serialize them, store the string, pass it back                                 |
+| Rich content: articles, chapters, anything already HTML       | **Yes** — you hand it HTML and CSS                                                       |
+| Your own selection menu                                       | **Yes** — [native menu items](./docs/REFERENCE.md#your-own-selection-menu), your actions |
+| A tap target on each highlight, with its position             | **Yes** — `onHighlightPressed` reports the rects                                         |
+| Selection on a native `<Text>` tree                           | No — this renders a WebView                                                              |
+| Web support                                                   | No — iOS and Android only                                                                |
+| Selection or highlights inside a PDF                          | No                                                                                       |
 
 ## Demo
 

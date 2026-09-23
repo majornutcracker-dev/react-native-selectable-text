@@ -2,7 +2,9 @@
 
 The package version follows [Semantic Versioning](https://semver.org/). `package.json`
 is the source of truth, but several native files **hardcode** the same version and must be
-kept in sync by hand. This guide lists every place to change and how to pick the bump.
+kept in sync by hand. This guide lists every place to change and how to pick the bump, then
+the references that are merely cosmetic and the other version strings in the repo that drift
+the same way without being the package version.
 
 ## Which bump?
 
@@ -32,13 +34,24 @@ Given `MAJOR.MINOR.PATCH`:
 regardless of whether the release is a patch, minor, or major. It is independent of
 `versionName`/semver.
 
+## Cosmetic references (nice to keep current, never release-blocking)
+
+The release workflow does not look at these, and a stale value here publishes a perfectly
+good package. Refresh them when you remember.
+
+| File                                    | What to change                         | Note                                                |
+| --------------------------------------- | -------------------------------------- | --------------------------------------------------- |
+| `.github/ISSUE_TEMPLATE/bug_report.yml` | `placeholder:` under the version input | Shows a greyed-out example version in the bug form. |
+
 ## Do NOT edit (auto-derived)
 
 - `ios/MajornutcrackerReactNativeSelectableText.podspec` — `s.version = package['version']`
   reads `package.json` at pod-install time. Its `summary`, `description`, `license`, `author`,
   and `homepage` also come from `package.json`. Leave it alone.
-- `example/` — the example app has its own versioning that is irrelevant to the published
-  package. Do not bump it as part of a release.
+- `example/package.json` and `example/app.json` — the example app has its own versioning,
+  irrelevant to the published package. Do not bump it as part of a release.
+- This guide — the versions in it (`1.0.0 → 1.1.0`, `git tag v1.1.0`, …) are examples of the
+  procedure, not values to keep in sync with the package.
 
 ## Changelog
 
@@ -73,12 +86,47 @@ grep -RIn "1\.1\.0" \
 
 Every listed file should appear (and `versionCode` should be one higher than before).
 
+## Other version strings in this repo
+
+These are **not** the package version and do not move during a release, but they are
+duplicated by hand in the same way, so they drift in the same way. Each list is every place
+that has to agree.
+
+### The supported `react-native-webview` range
+
+Changing which versions the module supports means touching all four:
+
+| File                   | What                                                                                     |
+| ---------------------- | ---------------------------------------------------------------------------------------- |
+| `package.json`         | `devDependencies` — the exact version developed and tested against.                      |
+| `package.json`         | `peerDependencies` — the range a consumer's app must satisfy.                            |
+| `README.md`            | The **Peer dependencies** sentence, which repeats the range in prose.                    |
+| `example/package.json` | The example app's own pin. Keep it inside the peer range, or the example proves nothing. |
+
+### The vendored Rangy copy
+
+Rangy is vendored as `src/rangy@1.3.2/`, so its version is part of a **directory name** and
+turns up in imports, tooling config and docs. Upgrading it is a rename plus all of these:
+
+- `src/utils.ts` and `src/__tests__/ignoredElements.test.ts` — the import paths.
+- `eslint.config.js`, `.prettierignore`, `.gitattributes` — the lint, format and vendoring rules.
+- `.github/CODEOWNERS` — the ownership entry.
+- `docs/THIRD-PARTY-NOTICES.md` — the `## Rangy (v1.3.2)` heading and the path below it.
+- `CONTRIBUTING.md` and `SECURITY.md` — both name the folder in prose.
+
+To catch the stragglers after a rename:
+
+```sh
+grep -rIn "rangy@" --exclude-dir=node_modules --exclude-dir=build .
+```
+
 ## Suggested release flow
 
 Publishing is automated: the [`Release`](../.github/workflows/release.yml) workflow triggers on
 any pushed tag matching `v*.*.*`. Do **not** run `npm publish` by hand.
 
-1. Bump all files above and update `CHANGELOG.md`.
+1. Bump every file in [Files to update](#files-to-update-must-all-match) and update
+   `CHANGELOG.md`. The cosmetic references can ride along.
 2. Commit — `bump:` or `chore:` per the commit conventions, e.g. `bump: v1.1.0`.
 3. Push the commit to `main` and let CI pass.
 4. Tag and push the tag:
