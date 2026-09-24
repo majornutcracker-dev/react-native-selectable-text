@@ -86,7 +86,7 @@ const highlighters: Highlighter[] = [
   },
 ];
 
-export default function Screen() {
+export default function Screen({ saved }: { saved?: string }) {
   const ref = React.useRef<SelectableTextViewRef>(null);
 
   return (
@@ -95,6 +95,8 @@ export default function Screen() {
       content="<h1>Hello</h1><p>Select some text and highlight it.</p>"
       css=".content { padding: 16px; font-size: 18px; }"
       highlighters={highlighters}
+      // What a previous session stored. Read once, when the view mounts.
+      initialHighlights={saved}
       onHighlightsChange={(highlights) => {
         // Persist this serialized string to restore highlights later.
         console.log(highlights);
@@ -106,12 +108,17 @@ export default function Screen() {
   );
 }
 
-// Highlight the current selection from anywhere with the ref:
+// From anywhere, with the ref:
 // ref.current?.highlightSelection("yellow-highlighter");
+// ref.current?.setHighlights(payload); // replace them; "" clears
+// ref.current?.undo();                 // and redo(), and clearHistory()
 ```
 
-Pass that serialized string back through the `highlights` prop to restore the
-highlights on remount.
+Store the string `onHighlightsChange` reports, hand it back through
+`initialHighlights` on the next mount, and the highlights come back where the
+reader left them. On a view that is already on screen, `setHighlights()`
+replaces them and `undo()` / `redo()` walk a history the view keeps for you —
+see the [API reference](./docs/REFERENCE.md#restoring-replacing-and-undoing).
 
 ## Documentation
 
