@@ -37,6 +37,21 @@ export type SelectableTextViewProps = SelectableTextViewPropsBase & {
   >;
 };
 
+/**
+ * The page reports the history the same way in its event and in its answer to
+ * `getHistory`, so both are read here rather than in two places that could
+ * drift apart.
+ */
+function readHistoryState(value: any): HistoryState {
+  return {
+    history: (value?.history ?? []) as Highlights[],
+    historyIndex: Number(value?.historyIndex ?? 0),
+    length: Number(value?.length ?? 0),
+    canUndo: Boolean(value?.canUndo),
+    canRedo: Boolean(value?.canRedo),
+  };
+}
+
 const SelectableTextView = React.forwardRef<
   SelectableTextViewRef,
   SelectableTextViewProps
@@ -255,20 +270,12 @@ const SelectableTextView = React.forwardRef<
           }
         } else if (data.type === BridgingNames.events.onHistoryChange) {
           onHistoryChange?.({
+            ...readHistoryState(data.value),
             change: data.value.change as HistoryChange,
-            historyIndex: Number(data.value.historyIndex),
-            length: Number(data.value.length),
-            canUndo: Boolean(data.value.canUndo),
-            canRedo: Boolean(data.value.canRedo),
           });
         } else if (data.type === BridgingNames.promises.getHistory) {
           const id = data.value.promiseId;
-          const history = data.value.history;
-          const historyIndex = data.value.historyIndex;
-          promises.current[id]?.resolve({
-            history,
-            historyIndex,
-          });
+          promises.current[id]?.resolve(readHistoryState(data.value));
           settlePromise(id);
         }
       } catch (error) {

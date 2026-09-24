@@ -734,18 +734,24 @@ export const htmlContent = ({
         }
       }
 
-      // @native-event
-      function sendOnHistoryChange(change) {
-        // Where the history stands, never the payloads themselves. This fires on
-        // every highlight, and each entry can be kilobytes; getHistory() is
-        // there for the rare caller that wants the entries.
-        postMessage(BridgingNames.events.onHistoryChange, {
-          change,
+      // @sdk-internal
+      function historyState() {
+        // One shape for both the event and getHistory, so the two can never
+        // disagree about where the history stands.
+        return {
+          history: __MNST__.state.history,
           historyIndex: __MNST__.state.historyIndex,
           length: __MNST__.state.history.length,
           canUndo: __MNST__.state.historyIndex > 0,
           canRedo: __MNST__.state.historyIndex < __MNST__.state.history.length - 1,
-        });
+        };
+      }
+
+      // @native-event
+      function sendOnHistoryChange(change) {
+        const state = historyState();
+        state.change = change;
+        postMessage(BridgingNames.events.onHistoryChange, state);
       }
 
       // @native-event
@@ -855,11 +861,9 @@ export const htmlContent = ({
 
       // @native-promise-resolve
       function sendGetHistory(promiseId) {
-        postMessage(BridgingNames.promises.getHistory, {
-          promiseId,
-          history: __MNST__.state.history,
-          historyIndex: __MNST__.state.historyIndex,
-        });
+        const state = historyState();
+        state.promiseId = promiseId;
+        postMessage(BridgingNames.promises.getHistory, state);
       }
 
       // @native-promise-resolve

@@ -304,13 +304,21 @@ export interface SelectableTextViewError extends Error {
 export type HistoryChange = "HISTORY" | "HISTORY_INDEX";
 
 /**
- * Where the undo history stands. The entries themselves are left out on
- * purpose: this fires on every change, and each one is a whole serialized
- * payload — call {@link SelectableTextViewRef.getHistory} when they are needed.
+ * Where the undo history stands, reported on every change. It carries the whole
+ * state — the entries included — so a consumer that mirrors the history does
+ * not have to ask for it; {@link SelectableTextViewRef.getHistory} is for
+ * reading it outside of a change.
+ *
+ * The entries are whole serialized payloads, which is why the history stops at
+ * {@link HISTORY_LIMIT}: it bounds both the memory and this message.
  */
-export type HistoryChangeEvent = {
+export type HistoryChangeEvent = HistoryState & {
   change: HistoryChange;
-  /** Which entry the content is sitting on, counting from 0. */
+};
+
+/** The whole history, as {@link SelectableTextViewRef.getHistory} returns it. */
+export interface HistoryState {
+  history: Highlights[];
   historyIndex: number;
   /**
    * How many entries the history holds, the state the view mounted with
@@ -321,12 +329,6 @@ export type HistoryChangeEvent = {
   canUndo: boolean;
   /** Whether {@link SelectableTextViewRef.redo} would do anything. */
   canRedo: boolean;
-};
-
-/** The whole history, as {@link SelectableTextViewRef.getHistory} returns it. */
-export interface HistoryState {
-  history: Highlights[];
-  historyIndex: number;
 }
 
 export type SelectableTextViewRef = {
