@@ -46,6 +46,9 @@ export default function Reader(props: { documentId: string }) {
 
   const [currentHighlighterName, setCurrentHighlighterName] =
     useState<HighlighterName>(highlighters[0].name);
+  // Straight from `onHistoryChange`: the view owns the history, the UI only
+  // asks whether the steps exist.
+  const [history, setHistory] = useState({ canUndo: false, canRedo: false });
   // Puts the reader back where it was left; `ready` once that has happened.
   const scroll = useScrollRestore(doc.id, viewRef);
   const search = useDocumentSearch(viewRef);
@@ -193,7 +196,11 @@ export default function Reader(props: { documentId: string }) {
           content={doc.content}
           css={doc.css}
           fonts={doc.fonts}
-          highlights={states[doc.id]?.serialized ?? ""}
+          // Read once, when this document opens. Everything after that goes
+          // through the ref.
+          // `undefined`, not `""`: nothing stored means leave the content as it
+          // is, while an empty string is an instruction to clear it.
+          initialHighlights={states[doc.id]?.serialized || undefined}
           highlighterOptions={{
             ignoredElements: [
               "a",
@@ -215,7 +222,12 @@ export default function Reader(props: { documentId: string }) {
             setSerialized(doc.id, serialized);
             setItems(doc.id, items);
           }}
-          onError={(error) => showToast(error.message)}
+          onHistoryChange={({ canUndo, canRedo }) => {
+            setHistory({ canUndo, canRedo });
+          }}
+          // The code is what tells a refused payload from a refused selection,
+          // so it belongs in the toast while this is a test bed.
+          onError={(error) => showToast(`${error.code}: ${error.message}`)}
           onHighlightPressed={(highlight) => {
             showMenu(highlight);
             return HIGHLIGHT_FOCUS_CLASS;
@@ -248,6 +260,8 @@ export default function Reader(props: { documentId: string }) {
       <ActionsFab
         selectableTextViewRef={viewRef}
         accent={doc.accent}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
         onClearHighlights={() => {
           dismiss();
           reset(doc.id);

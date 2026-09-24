@@ -24,6 +24,9 @@ type ActionsFabProps = {
   /** Reader accent, so the FAB picks up the current document's colour. */
   accent?: string;
   onClearHighlights: () => void;
+  /** From `onHistoryChange`, so undo and redo dim when there is nowhere to go. */
+  canUndo: boolean;
+  canRedo: boolean;
 };
 
 type ActionFabIconName =
@@ -31,7 +34,9 @@ type ActionFabIconName =
   | "highlights-data"
   | "selection"
   | "toggle-highlights"
-  | "clear-highlights";
+  | "clear-highlights"
+  | "undo"
+  | "redo";
 
 type ActionFabItem = {
   key: string;
@@ -39,6 +44,8 @@ type ActionFabItem = {
   tint: string;
   icon: ActionFabIconName;
   onPress: () => void | Promise<void>;
+  /** Shown, but dimmed and inert — the history says the step is not there. */
+  disabled?: boolean;
 };
 
 export function ActionsFab(props: ActionsFabProps) {
@@ -143,6 +150,29 @@ export function ActionsFab(props: ActionsFabProps) {
       },
     },
     {
+      key: "undo",
+      label: "Undo",
+      tint: theme.color.accentSoft,
+      icon: "undo",
+      disabled: !props.canUndo,
+      onPress: () => props.selectableTextViewRef.current?.undo(),
+    },
+    {
+      key: "redo",
+      label: "Redo",
+      tint: theme.color.accentSoft,
+      icon: "redo",
+      disabled: !props.canRedo,
+      onPress: () => props.selectableTextViewRef.current?.redo(),
+    },
+    {
+      key: "clear-history",
+      label: "Clear History",
+      tint: theme.color.textMuted,
+      icon: "undo",
+      onPress: () => props.selectableTextViewRef.current?.clearHistory(),
+    },
+    {
       key: "clear-highlights",
       label: "Clear Highlights",
       tint: theme.color.danger,
@@ -168,6 +198,9 @@ export function ActionsFab(props: ActionsFabProps) {
   };
 
   const runAction = (action: ActionFabItem) => {
+    if (action.disabled) {
+      return;
+    }
     setExpanded(false);
     void action.onPress();
   };
@@ -229,6 +262,7 @@ export function ActionsFab(props: ActionsFabProps) {
               <ActionFabButton
                 tint={action.tint}
                 icon={action.icon}
+                disabled={action.disabled}
                 onPress={() => runAction(action)}
               />
               <Animated.Text
@@ -280,6 +314,7 @@ function ActionFabButton(props: {
   tint: string;
   icon: ActionFabIconName;
   onPress: () => void;
+  disabled?: boolean;
 }) {
   const pressScale = useRef(new Animated.Value(1)).current;
 
@@ -295,12 +330,14 @@ function ActionFabButton(props: {
   return (
     <Pressable
       onPress={props.onPress}
-      onPressIn={() => animatePress(0.85)}
+      disabled={props.disabled}
+      onPressIn={() => animatePress(props.disabled ? 1 : 0.85)}
       onPressOut={() => animatePress(1)}
     >
       <Animated.View
         style={[
           styles.actionFabButtonOuter,
+          props.disabled && styles.actionFabButtonDisabled,
           { transform: [{ scale: pressScale }] },
         ]}
       >
@@ -400,6 +437,16 @@ function ActionFabIcon(props: { tint: string; icon: ActionFabIconName }) {
             { backgroundColor: props.tint },
           ]}
         />
+      </View>
+    );
+  }
+
+  if (props.icon === "undo" || props.icon === "redo") {
+    const flipped = props.icon === "redo";
+    return (
+      <View style={[styles.historyIcon, flipped && styles.historyIconFlipped]}>
+        <View style={[styles.historyIconArc, { borderColor: props.tint }]} />
+        <View style={[styles.historyIconHead, { borderColor: props.tint }]} />
       </View>
     );
   }
@@ -563,6 +610,28 @@ const styles = StyleSheet.create({
   },
   highlightsDataLineShort: {
     flex: 0.6,
+  },
+  actionFabButtonDisabled: { opacity: 0.35 },
+  historyIcon: { width: 20, height: 18, justifyContent: "flex-end" },
+  historyIconFlipped: { transform: [{ scaleX: -1 }] },
+  historyIconArc: {
+    width: 18,
+    height: 11,
+    borderWidth: 2,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 9,
+    borderTopRightRadius: 9,
+    borderRightWidth: 0,
+  },
+  historyIconHead: {
+    position: "absolute",
+    left: 0,
+    bottom: 0,
+    width: 8,
+    height: 8,
+    borderLeftWidth: 2,
+    borderBottomWidth: 2,
+    transform: [{ rotate: "45deg" }],
   },
   clearHighlightIcon: {
     width: 18,
