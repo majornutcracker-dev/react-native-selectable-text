@@ -8,9 +8,11 @@ export function Toolbar({
   current,
   onPick,
   onClear,
-  onRestore,
+  onUndo,
+  onRedo,
   onToggle,
-  canRestore,
+  canUndo,
+  canRedo,
   status,
   bottomInset,
 }) {
@@ -48,9 +50,15 @@ export function Toolbar({
           <Action icon="eye-outline" label="Hide or show" onPress={onToggle} />
           <Action
             icon="arrow-undo-outline"
-            label="Restore the saved highlights"
-            onPress={onRestore}
-            disabled={!canRestore}
+            label="Undo"
+            onPress={onUndo}
+            disabled={!canUndo}
+          />
+          <Action
+            icon="arrow-redo-outline"
+            label="Redo"
+            onPress={onRedo}
+            disabled={!canRedo}
           />
           <Action icon="trash-outline" label="Clear all" onPress={onClear} />
         </View>
