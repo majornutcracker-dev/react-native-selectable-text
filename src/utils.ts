@@ -970,11 +970,31 @@ export const htmlContent = ({
 
       // @sdk-internal-with-event
       function updateHighlights(highlights, ignoreHistory) {
-        // \`highlights\` is a state prop: null/undefined means "leave as is",
-        // while an empty string means "clear everything". Treating "" as a
-        // no-op would make the prop impossible to reset.
+        // \`null\`/\`undefined\` means "leave as is", while an empty string means
+        // "clear everything". Treating "" as a no-op would make the highlights
+        // impossible to reset.
         if (highlights == null) {
           return;
+        }
+        // Refused before anything is touched: a payload that is not one cannot
+        // cost the reader the highlights they already have.
+        // Rangy looks at the same first segment, and throws when it is missing.
+        const payloadType = String(highlights).split("|")[0];
+        if (highlights && !/^type:[A-Za-z0-9_]+$/.test(payloadType)) {
+          sendOnError(
+            "invalid_highlight",
+            "Failed to restore highlights",
+            "Not a serialized highlights payload: " + String(highlights).slice(0, 60)
+          );
+          return;
+        }
+        // What the content holds right now, to put back if the payload turns
+        // out to be unusable halfway through deserializing it.
+        let previous = null;
+        try {
+          previous = __MNST__.highlighter.serialize();
+        } catch (e) {
+          previous = null;
         }
         try {
           clearHighlightFocusStyle();
@@ -988,11 +1008,34 @@ export const htmlContent = ({
           // restored highlights play their entrance once, as they did before.
           markEntering(__MNST__.highlighter.highlights || []);
           applyHighlightVisibilityClass(false, true);
-          sendOnHighlightChange( __MNST__.highlighter.serialize(), ignoreHistory);
+          sendOnHighlightChange(__MNST__.highlighter.serialize(), ignoreHistory);
         } catch (e) {
+          rollbackHighlights(previous);
           sendOnError(
             "invalid_highlight",
             "Failed to restore highlights",
+            e?.message ?? String(e)
+          );
+        }
+      }
+
+      // @sdk-internal
+      function rollbackHighlights(previous) {
+        // Deserializing can fail partway, leaving some of the payload applied,
+        // so the content is put back rather than left in between. No change
+        // event: as far as the consumer is concerned nothing happened, and the
+        // history must not record a state the reader never saw.
+        try {
+          __MNST__.highlighter.removeAllHighlights();
+          if (previous) {
+            __MNST__.highlighter.deserialize(previous);
+          }
+          reconcileIgnoredElements();
+          applyHighlightVisibilityClass(false, true);
+        } catch (e) {
+          sendOnError(
+            "invalid_highlight",
+            "Failed to restore the previous highlights",
             e?.message ?? String(e)
           );
         }
