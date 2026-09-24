@@ -396,6 +396,15 @@ export type SelectableTextViewRef = {
    */
   redo: () => void;
   /**
+   * Forgets every recorded state and starts the history again from what the
+   * content holds right now, the way it stood when the view mounted: nothing
+   * to undo, nothing to redo, and the highlights left exactly as they are.
+   *
+   * For the moments after which going back makes no sense — the highlights
+   * were just saved, or a screen handed the view a different set to work on.
+   */
+  clearHistory: () => void;
+  /**
    * Reads the undo history itself — every payload it holds and which one the
    * content is on. {@link SelectableTextViewProps.onHistoryChange} already
    * reports whether a step exists, so this is for the callers that want the
@@ -655,6 +664,7 @@ export const BridgingNames = {
     unhighlightById: "unhighlightById",
     redo: "redo",
     undo: "undo",
+    clearHistory: "clearHistory",
   },
   // out
   events: {

@@ -659,6 +659,8 @@ export const htmlContent = ({
           redo();
         } else if (type === BridgingNames.functions.undo) {
           undo();
+        } else if (type === BridgingNames.functions.clearHistory) {
+          clearHistory();
         } else {
           sendOnError(
             "bridge_message_error",
@@ -705,6 +707,19 @@ export const htmlContent = ({
         __MNST__.state.history = kept;
         __MNST__.state.historyIndex = kept.length - 1;
         sendOnHistoryChange("HISTORY");
+      }
+
+      // @sdk-internal
+      function clearHistory() {
+        // Starts again from what is on screen, so undo has a floor to stop at —
+        // the same state a freshly mounted view starts with.
+        let current = "";
+        try {
+          current = __MNST__.highlighter.serialize();
+        } catch (e) {
+          current = "";
+        }
+        seedHistory(current);
       }
 
       // @sdk-internal
@@ -969,7 +984,7 @@ export const htmlContent = ({
       // <------------------------ Internal functions ------------------------------->
 
       // @sdk-internal-with-event
-      function updateHighlights(highlights, ignoreHistory) {
+      function updateHighlights(highlights, fromHistory) {
         // \`null\`/\`undefined\` means "leave as is", while an empty string means
         // "clear everything". Treating "" as a no-op would make the highlights
         // impossible to reset.
@@ -1004,11 +1019,17 @@ export const htmlContent = ({
             __MNST__.highlighter.deserialize(highlights);
           }
           reconcileIgnoredElements();
-          // Every highlight here is new — the old ones were just removed — so
-          // restored highlights play their entrance once, as they did before.
-          markEntering(__MNST__.highlighter.highlights || []);
+          if (!fromHistory) {
+            // Every highlight here is new — the old ones were just removed — so
+            // restored highlights play their entrance once, as they did before.
+            //
+            // Stepping through the history is the exception: an undo puts back
+            // a state the reader has already seen, and replaying the entrance
+            // would announce it as something that just happened.
+            markEntering(__MNST__.highlighter.highlights || []);
+          }
           applyHighlightVisibilityClass(false, true);
-          sendOnHighlightChange(__MNST__.highlighter.serialize(), ignoreHistory);
+          sendOnHighlightChange(__MNST__.highlighter.serialize(), fromHistory);
         } catch (e) {
           rollbackHighlights(previous);
           sendOnError(

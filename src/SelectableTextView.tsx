@@ -476,6 +476,13 @@ const SelectableTextView = React.forwardRef<
     });
   };
 
+  const clearHistory = () => {
+    _postMessage({
+      type: BridgingNames.functions.clearHistory,
+      value: null,
+    });
+  };
+
   const getHistory = () =>
     _request<HistoryState>(BridgingNames.promises.getHistory);
 
@@ -533,6 +540,7 @@ const SelectableTextView = React.forwardRef<
     setHighlights,
     undo,
     redo,
+    clearHistory,
     getHistory,
   }));
 
