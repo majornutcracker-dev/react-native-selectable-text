@@ -3,7 +3,7 @@ import { render, act } from "@testing-library/react-native";
 
 import SelectableTextView from "../SelectableTextView";
 import { BridgingNames } from "../types";
-import type { SelectableTextViewRef } from "../types";
+import type { HistoryState, SelectableTextViewRef } from "../types";
 import type { SelectableTextViewProps } from "../SelectableTextView";
 
 // Mock react-native-webview: expose the last props (so we can invoke onMessage)
@@ -383,27 +383,130 @@ describe("WebView readiness", () => {
   });
 });
 
-describe("highlights state prop", () => {
-  it("does not re-post the initial value, which the HTML already carries", () => {
-    renderComponent({ highlights: "serialized" });
+describe("initialHighlights", () => {
+  it("does not post the initial value, which the HTML already carries", () => {
+    renderComponent({ initialHighlights: "serialized" });
     expect(mockPostMessage).not.toHaveBeenCalled();
   });
 
-  it("posts an empty string so the prop can be cleared", () => {
-    const ref = React.createRef<SelectableTextViewRef>();
+  it("is read once: a later change is not posted", () => {
     const view = render(
-      <SelectableTextView ref={ref} content="<p>hi</p>" highlights="abc" />
+      <SelectableTextView content="<p>hi</p>" initialHighlights="A" />
     );
     fireLoadEnd();
     mockPostMessage.mockClear();
 
     view.rerender(
-      <SelectableTextView ref={ref} content="<p>hi</p>" highlights="" />
+      <SelectableTextView content="<p>hi</p>" initialHighlights="B" />
     );
+
+    expect(mockPostMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("the highlights history", () => {
+  it("posts a replacement through setHighlights", () => {
+    const ref = renderComponent();
+
+    act(() => ref.current?.setHighlights("payload"));
+
+    expect(lastPosted()).toEqual({
+      type: BridgingNames.functions.updateHighlights,
+      value: "payload",
+    });
+  });
+
+  it("clears with an empty string", () => {
+    const ref = renderComponent();
+
+    act(() => ref.current?.setHighlights(""));
 
     expect(lastPosted()).toEqual({
       type: BridgingNames.functions.updateHighlights,
       value: "",
+    });
+  });
+
+  it.each([
+    ["undo", BridgingNames.functions.undo],
+    ["redo", BridgingNames.functions.redo],
+    ["clearHistory", BridgingNames.functions.clearHistory],
+  ])("asks the page to %s", (method, type) => {
+    const ref = renderComponent();
+
+    act(() => (ref.current as any)[method]());
+
+    expect(lastPosted()).toEqual({ type, value: null });
+  });
+
+  it("hands the reported history state to onHistoryChange", async () => {
+    const onHistoryChange = jest.fn();
+    renderComponent({ onHistoryChange });
+
+    await fireMessage(BridgingNames.events.onHistoryChange, {
+      change: "HISTORY",
+      history: ["type:textContent", "type:textContent|1$2$1$yellow$"],
+      historyIndex: 1,
+      length: 2,
+      canUndo: true,
+      canRedo: false,
+    });
+
+    expect(onHistoryChange).toHaveBeenCalledWith({
+      change: "HISTORY",
+      history: ["type:textContent", "type:textContent|1$2$1$yellow$"],
+      historyIndex: 1,
+      length: 2,
+      canUndo: true,
+      canRedo: false,
+    });
+  });
+
+  it("fills in what a malformed history message leaves out", async () => {
+    const onHistoryChange = jest.fn();
+    renderComponent({ onHistoryChange });
+
+    await fireMessage(BridgingNames.events.onHistoryChange, {
+      change: "HISTORY_INDEX",
+    });
+
+    expect(onHistoryChange).toHaveBeenCalledWith({
+      change: "HISTORY_INDEX",
+      history: [],
+      historyIndex: 0,
+      length: 0,
+      canUndo: false,
+      canRedo: false,
+    });
+  });
+
+  it("resolves getHistory with the entries the page reports", async () => {
+    const ref = renderComponent();
+    mockPostMessage.mockClear();
+
+    let pending!: Promise<HistoryState>;
+    act(() => {
+      pending = ref.current!.getHistory();
+    });
+    const posted = lastPosted();
+    expect(posted.type).toBe(BridgingNames.promises.getHistory);
+
+    await fireMessage(BridgingNames.promises.getHistory, {
+      // The page answers with the id it was given.
+      promiseId: posted.value,
+      history: ["type:textContent"],
+      historyIndex: 0,
+      length: 1,
+      canUndo: false,
+      canRedo: true,
+    });
+
+    await expect(pending).resolves.toEqual({
+      history: ["type:textContent"],
+      historyIndex: 0,
+      length: 1,
+      canUndo: false,
+      canRedo: true,
     });
   });
 });
@@ -576,68 +679,6 @@ describe("selection handling", () => {
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({ details: "validation exploded" })
     );
-  });
-});
-
-describe("highlights prop echo suppression", () => {
-  function renderRerenderable(props: Partial<SelectableTextViewProps> = {}) {
-    const view = render(<SelectableTextView content="<p>hi</p>" {...props} />);
-    fireLoadEnd();
-    return (next: Partial<SelectableTextViewProps>) =>
-      view.rerender(
-        <SelectableTextView content="<p>hi</p>" {...props} {...next} />
-      );
-  }
-
-  const updateCalls = () =>
-    mockPostMessage.mock.calls
-      .map((call) => JSON.parse(call[0]))
-      .filter(
-        (message) => message.type === BridgingNames.functions.updateHighlights
-      );
-
-  it("ignores a value the view itself just reported", async () => {
-    const rerender = renderRerenderable({ highlights: "A" });
-    await fireMessage(BridgingNames.events.onHighlightsChange, {
-      highlights: "B",
-      items: [],
-    });
-    mockPostMessage.mockClear();
-
-    // What a controlled consumer does: store the emitted payload, pass it back.
-    rerender({ highlights: "B" });
-
-    expect(updateCalls()).toHaveLength(0);
-  });
-
-  it("still restores a payload the view did not emit", async () => {
-    const rerender = renderRerenderable({ highlights: "A" });
-    await fireMessage(BridgingNames.events.onHighlightsChange, {
-      highlights: "B",
-      items: [],
-    });
-    mockPostMessage.mockClear();
-
-    rerender({ highlights: "C" });
-
-    expect(updateCalls()).toEqual([
-      { type: BridgingNames.functions.updateHighlights, value: "C" },
-    ]);
-  });
-
-  it("still clears when reset to an empty string", async () => {
-    const rerender = renderRerenderable({ highlights: "A" });
-    await fireMessage(BridgingNames.events.onHighlightsChange, {
-      highlights: "B",
-      items: [],
-    });
-    mockPostMessage.mockClear();
-
-    rerender({ highlights: "" });
-
-    expect(updateCalls()).toEqual([
-      { type: BridgingNames.functions.updateHighlights, value: "" },
-    ]);
   });
 });
 
