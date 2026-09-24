@@ -39,9 +39,17 @@ regardless of whether the release is a patch, minor, or major. It is independent
 The release workflow does not look at these, and a stale value here publishes a perfectly
 good package. Refresh them when you remember.
 
-| File                                    | What to change                         | Note                                                |
-| --------------------------------------- | -------------------------------------- | --------------------------------------------------- |
-| `.github/ISSUE_TEMPLATE/bug_report.yml` | `placeholder:` under the version input | Shows a greyed-out example version in the bug form. |
+| File                                    | What to change                                                     | Note                                                                                       |
+| --------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `.github/ISSUE_TEMPLATE/bug_report.yml` | `placeholder:` under the version input                             | Shows a greyed-out example version in the bug form.                                        |
+| `snack/package.json`                    | the pinned `@majornutcracker/react-native-selectable-text` version | The Snack demo installs exactly that version, so a stale pin shows the world an old build. |
+
+The Snack itself is a hand-kept copy of `snack/`, so bumping the file here is
+only half of it: open the published Snack and raise the pinned version in its
+dependency panel too. Until you do, the "try it" link everyone clicks — the
+README, the React Native Directory entry, answers that point at it — is running
+the previous release. See [`snack/README.md`](../snack/README.md) for the full
+procedure.
 
 ## Do NOT edit (auto-derived)
 

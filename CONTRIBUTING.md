@@ -43,6 +43,16 @@ yarn ios            # or: yarn android
   - `rangy@1.3.2/` — vendored [Rangy](https://github.com/timdown/rangy) (do **not** edit or strip its copyright headers; see [THIRD-PARTY-NOTICES.md](./docs/THIRD-PARTY-NOTICES.md)).
 - `android/`, `ios/` — the native Kotlin/Swift bridge.
 - `example/` — a runnable Expo app used as the manual test bed.
+- `snack/` — the source of the published [Expo Snack](./snack/README.md), kept
+  here and copied into Snack by hand.
+- `react-native-libraries-entry.json` — our entry in
+  [React Native Directory](https://github.com/react-native-community/directory),
+  the listing most people browse before picking a library. The directory keeps
+  the real copy inside its own `react-native-libraries.json`; this file is the
+  local original, so a change here is not live until it is sent over as a pull
+  request to that repository. Update it when a platform flag changes, when the
+  example or demo links move, or when a new one (such as the Snack) is worth
+  listing under `examples`.
 
 When adding a bridge message, keep the three sides in sync: `BridgingNames` (types.ts), the WebView handler (utils.ts), and the RN handler (SelectableTextView.tsx).
 
