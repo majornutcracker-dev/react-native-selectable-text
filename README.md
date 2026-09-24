@@ -11,6 +11,10 @@ highlighting via [Rangy](https://github.com/timdown/rangy). Serialize, sync, res
 
 Web is not supported.
 
+> **[Try it in Expo Go →](https://snack.expo.dev/@majornutcracker/selectabletext)**
+> Select a passage, pick a color from the native menu, clear the highlights and
+> bring them back. No install, no build.
+
 ## Is this the right library?
 
 | You need                                                      | This module                                                                              |
