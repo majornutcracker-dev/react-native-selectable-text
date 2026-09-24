@@ -6,7 +6,7 @@ import {
   serializer,
   textRange,
 } from "./rangy@1.3.2";
-import { BridgingNames } from "./types";
+import { BridgingNames, INITIAL_HIGHLIGHTS } from "./types";
 import type {
   Highlighter,
   AnimationOptions,
@@ -573,6 +573,8 @@ export const htmlContent = ({
         window.__MNST__ = {
           // state
           state: {
+            history: [],
+            historyIndex: -1,
             focusedElements: [],
             visible: true,
             // id -> timer, for removals waiting on an exit animation.
@@ -621,7 +623,7 @@ export const htmlContent = ({
       // @native-receiver
       function onMessage(type, value) {
         if (type === BridgingNames.functions.updateHighlights) {
-          updateHighlights(value); // highlights
+          updateHighlights(value,false); // highlights
         } else if (type === BridgingNames.functions.highlightSelection) {
           // { name, keepSelection, expectSelectionVersion }
           highlightSelection(
@@ -651,6 +653,12 @@ export const htmlContent = ({
           toggleHighlightsVisibility(value); // promiseId
         } else if (type === BridgingNames.promises.evaluateJavaScript) {
           evaluateJavaScript(value); // { promiseId, script }
+        } else if (type === BridgingNames.promises.getHistory) {
+          sendGetHistory(value)
+        } else if (type === BridgingNames.functions.redo) {
+          redo();
+        } else if (type === BridgingNames.functions.undo) {
+          undo()
         } else {
           sendOnError(
             "bridge_message_error",
@@ -683,8 +691,47 @@ export const htmlContent = ({
         }));
       }
 
+      // @sdk-internal
+      function pushHistory(highlights) {
+        __MNST__.state.history = [
+          ...__MNST__.state.history.slice(0, __MNST__.state.historyIndex + 1), 
+          highlights
+        ];
+        __MNST__.state.historyIndex = __MNST__.state.history.length - 1;
+        sendOnHistoryChange("HISTORY", __MNST__.state.history, __MNST__.state.historyIndex);
+      }
+
+      // @sdk-internal
+      function redo() {
+        if (__MNST__.state.historyIndex < __MNST__.state.history.length - 1) {
+          __MNST__.state.historyIndex = __MNST__.state.historyIndex + 1;
+          sendOnHistoryChange("HISTORY_INDEX", __MNST__.state.history, __MNST__.state.historyIndex);
+          const highlights = __MNST__.state.history[__MNST__.state.historyIndex];
+          updateHighlights(highlights, true);
+        }
+      }
+
+      // @sdk-internal
+      function undo() {
+        if (__MNST__.state.historyIndex > 0) {
+          __MNST__.state.historyIndex = __MNST__.state.historyIndex - 1;
+          sendOnHistoryChange("HISTORY_INDEX", __MNST__.state.history, __MNST__.state.historyIndex);
+          const highlights = __MNST__.state.history[__MNST__.state.historyIndex];
+          updateHighlights(highlights, true);
+        }
+      }
+
       // @native-event
-      function sendOnHighlightChange(highlights) {
+      function sendOnHistoryChange(change, history, historyIndex) {
+        postMessage(BridgingNames.events.onHistoryChange, {
+          history,
+          historyIndex,
+          change,
+        });
+      }
+
+      // @native-event
+      function sendOnHighlightChange(highlights, ignoreHistory) {
         // The items are already in memory at this point, so they ride along and
         // save the consumer a getAllHighlightsData() round-trip per change.
         let items = [];
@@ -697,6 +744,8 @@ export const htmlContent = ({
           highlights: highlights,
           items: items,
         });
+        if (ignoreHistory) return
+        pushHistory(highlights);
       }
 
       // @native-event
@@ -784,6 +833,15 @@ export const htmlContent = ({
       // @native-event
       function sendOnHighlightsVisibilityStateChange(visibilityState) {
         postMessage(BridgingNames.events.onHighlightsVisibilityStateChange, visibilityState);
+      }
+
+      // @native-promise-resolve
+      function sendGetHistory(promiseId) {
+        postMessage(BridgingNames.promises.getHistory, {
+          promiseId,
+          history: __MNST__.state.history,
+          historyIndex: __MNST__.state.historyIndex ,
+        });
       }
 
       // @native-promise-resolve
@@ -889,7 +947,7 @@ export const htmlContent = ({
       // <------------------------ Internal functions ------------------------------->
 
       // @sdk-internal-with-event
-      function updateHighlights(highlights) {
+      function updateHighlights(highlights, ignoreHistory) {
         // \`highlights\` is a state prop: null/undefined means "leave as is",
         // while an empty string means "clear everything". Treating "" as a
         // no-op would make the prop impossible to reset.
@@ -908,7 +966,7 @@ export const htmlContent = ({
           // restored highlights play their entrance once, as they did before.
           markEntering(__MNST__.highlighter.highlights || []);
           applyHighlightVisibilityClass(false, true);
-          sendOnHighlightChange(__MNST__.highlighter.serialize());
+          sendOnHighlightChange( __MNST__.highlighter.serialize(), ignoreHistory);
         } catch (e) {
           sendOnError(
             "invalid_highlight",
@@ -1578,7 +1636,7 @@ export const htmlContent = ({
 
         // null (not "") so that mounting without highlights stays a no-op —
         // an empty string means "clear", which would emit a spurious change event.
-        updateHighlights(${toScriptLiteral(highlights ?? null)});
+        updateHighlights(${toScriptLiteral(highlights ?? INITIAL_HIGHLIGHTS)}, false);
 
         if (__MNST__.platform.isAndroid) {
           document.addEventListener("message", function (event) {

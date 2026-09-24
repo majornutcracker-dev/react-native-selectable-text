@@ -297,6 +297,17 @@ export interface SelectableTextViewError extends Error {
   code: SelectableTextViewErrorCode;
 }
 
+export type HistoryChange = "HISTORY" | "HISTORY_INDEX";
+
+export type HistoryChangeEvent = HistoryState & {
+  change: HistoryChange;
+};
+
+export interface HistoryState {
+  history: Highlights[];
+  historyIndex: number;
+}
+
 export type SelectableTextViewRef = {
   /**
    * A function that applies highlighting to the current selection with a highlighter name previously defined in the highlighters property;
@@ -333,6 +344,38 @@ export type SelectableTextViewRef = {
    * A function that removes all the highlights
    */
   clearHighlights: () => void;
+  /**
+   * Replaces every highlight in the content with the ones a serialized payload
+   * describes — the way to restore after mount, where `initialHighlights` no
+   * longer applies.
+   *
+   * An empty string clears them, which is what `clearHighlights()` does. A
+   * payload that does not belong to this content is reported through `onError`
+   * with `invalid_highlight` rather than throwing.
+   * @param highlights A payload from `getHighlights()` or `onHighlightsChange`.
+   * @throws js Error
+   */
+  setHighlights: (highlights: Highlights) => void;
+  /**
+   * Steps back to the previous set of highlights. Does nothing when there is
+   * nothing to go back to — {@link SelectableTextViewProps.onHistoryChange}
+   * reports when that is the case, so a button can disable itself.
+   *
+   * The history records content changes only: highlighting, unhighlighting,
+   * clearing and `setHighlights`. Showing, hiding and focusing are left out,
+   * since an undo that un-hid highlights would be a surprise.
+   *
+   */
+  undo: () => void;
+  /**
+   * Steps forward again after an {@link SelectableTextViewRef.undo}. Making a
+   * new change instead drops whatever was ahead, as editors do.
+   */
+  redo: () => void;
+  /**
+   *
+   */
+  getHistory: () => Promise<HistoryState>;
   /**
    * A promise that returns the selected text
    * @throws js Error
@@ -453,16 +496,16 @@ export type SelectableTextViewPropsBase = {
    */
   highlighters?: Highlighter[];
   /**
-   * --> State property
-   * A serialized string that represents the current highlights in the content. This can be used to restore the highlights when the component is re-rendered, for example when the user navigates away from the screen and then comes back.
-   * You can obtain this string from getHighlights method or onHighlightsChange event.
-   * You can also use as a state, the content will be re-rendered with the highlights applied whenever this string changes.
+   * --> Final property
+   * The serialized highlights to paint on mount — the string a previous session
+   * stored, from `getHighlights()` or `onHighlightsChange`.
    *
-   * A value the view itself just emitted through `onHighlightsChange` is ignored, so
-   * storing that value in state and passing it straight back is safe and will not
-   * replay the highlights.
+   * It is read once, when the content is built. Changing it afterwards does
+   * nothing: use {@link SelectableTextViewRef.setHighlights} to replace the
+   * highlights of a mounted view, and remount the component to start from a
+   * different document.
    */
-  highlights?: Highlights;
+  initialHighlights?: Highlights;
   /**
    * --> Final property
    * A html string that will be rendered in the WebView.
@@ -558,6 +601,14 @@ export type SelectableTextViewPropsBase = {
    * @param message The `type` and `data` the page sent.
    */
   onCustomMessage?: (message: CustomMessage) => void;
+
+  /**
+   * Called when the undo history moves, so the controls that drive it can
+   * enable and disable themselves without keeping their own copy of it.
+   *
+   * Fires on every recorded change and on each `undo()` / `redo()`.
+   */
+  onHistoryChange?: (event: HistoryChangeEvent) => void;
 };
 
 export type Message = {
@@ -575,6 +626,8 @@ export const BridgingNames = {
     focusHighlight: "focusHighlight",
     unfocusHighlight: "unfocusHighlight",
     unhighlightById: "unhighlightById",
+    redo: "redo",
+    undo: "undo",
   },
   // out
   events: {
@@ -584,6 +637,7 @@ export const BridgingNames = {
     onHighlightPressed: "onHighlightPressed",
     onHighlightsVisibilityStateChange: "onHighlightsVisibilityStateChange",
     onCustomMessage: "onCustomMessage",
+    onHistoryChange: "onHistoryChange",
     // dev
     log: "log",
   },
@@ -595,7 +649,10 @@ export const BridgingNames = {
     getHighlightsVisibilityState: "getHighlightsVisibilityState",
     toggleHighlightsVisibility: "toggleHighlightsVisibility",
     evaluateJavaScript: "evaluateJavaScript",
+    getHistory: "getHistory",
   },
 };
 
 export const VERSION = "1.1.0";
+
+export const INITIAL_HIGHLIGHTS = "type:textContent";
