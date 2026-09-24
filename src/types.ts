@@ -297,12 +297,33 @@ export interface SelectableTextViewError extends Error {
   code: SelectableTextViewErrorCode;
 }
 
+/**
+ * What moved: a new entry was recorded (`HISTORY`), or the view stepped through
+ * the entries it already had (`HISTORY_INDEX`, from `undo()` or `redo()`).
+ */
 export type HistoryChange = "HISTORY" | "HISTORY_INDEX";
 
-export type HistoryChangeEvent = HistoryState & {
+/**
+ * Where the undo history stands. The entries themselves are left out on
+ * purpose: this fires on every change, and each one is a whole serialized
+ * payload — call {@link SelectableTextViewRef.getHistory} when they are needed.
+ */
+export type HistoryChangeEvent = {
   change: HistoryChange;
+  /** Which entry the content is sitting on, counting from 0. */
+  historyIndex: number;
+  /**
+   * How many entries the history holds, the state the view mounted with
+   * included. It stops growing at {@link HISTORY_LIMIT}, dropping the oldest.
+   */
+  length: number;
+  /** Whether {@link SelectableTextViewRef.undo} would do anything. */
+  canUndo: boolean;
+  /** Whether {@link SelectableTextViewRef.redo} would do anything. */
+  canRedo: boolean;
 };
 
+/** The whole history, as {@link SelectableTextViewRef.getHistory} returns it. */
 export interface HistoryState {
   history: Highlights[];
   historyIndex: number;
@@ -373,7 +394,11 @@ export type SelectableTextViewRef = {
    */
   redo: () => void;
   /**
-   *
+   * Reads the undo history itself — every payload it holds and which one the
+   * content is on. {@link SelectableTextViewProps.onHistoryChange} already
+   * reports whether a step exists, so this is for the callers that want the
+   * entries: a history panel, a diff, a save of the whole session.
+   * @throws js Error
    */
   getHistory: () => Promise<HistoryState>;
   /**
@@ -653,6 +678,11 @@ export const BridgingNames = {
   },
 };
 
-export const VERSION = "1.1.0";
+/**
+ * How many states the undo history keeps. Every entry is a whole serialized
+ * payload, and a reader can produce a great many in one sitting, so the oldest
+ * are dropped rather than held forever.
+ */
+export const HISTORY_LIMIT = 50;
 
-export const INITIAL_HIGHLIGHTS = "type:textContent";
+export const VERSION = "1.1.0";

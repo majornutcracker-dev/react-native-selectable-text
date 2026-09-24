@@ -254,13 +254,12 @@ const SelectableTextView = React.forwardRef<
             onCustomMessage?.({ type: message.type, data: message.data });
           }
         } else if (data.type === BridgingNames.events.onHistoryChange) {
-          const history = (data.value.history ?? []) as Highlights[];
-          const historyIndex = Number(data.value.historyIndex);
-          const change = data.value.change as HistoryChange;
           onHistoryChange?.({
-            history,
-            historyIndex,
-            change,
+            change: data.value.change as HistoryChange,
+            historyIndex: Number(data.value.historyIndex),
+            length: Number(data.value.length),
+            canUndo: Boolean(data.value.canUndo),
+            canRedo: Boolean(data.value.canRedo),
           });
         } else if (data.type === BridgingNames.promises.getHistory) {
           const id = data.value.promiseId;

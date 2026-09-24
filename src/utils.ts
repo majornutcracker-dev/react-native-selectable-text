@@ -6,7 +6,7 @@ import {
   serializer,
   textRange,
 } from "./rangy@1.3.2";
-import { BridgingNames, INITIAL_HIGHLIGHTS } from "./types";
+import { BridgingNames, HISTORY_LIMIT } from "./types";
 import type {
   Highlighter,
   AnimationOptions,
@@ -623,7 +623,7 @@ export const htmlContent = ({
       // @native-receiver
       function onMessage(type, value) {
         if (type === BridgingNames.functions.updateHighlights) {
-          updateHighlights(value,false); // highlights
+          updateHighlights(value, false); // highlights
         } else if (type === BridgingNames.functions.highlightSelection) {
           // { name, keepSelection, expectSelectionVersion }
           highlightSelection(
@@ -654,11 +654,11 @@ export const htmlContent = ({
         } else if (type === BridgingNames.promises.evaluateJavaScript) {
           evaluateJavaScript(value); // { promiseId, script }
         } else if (type === BridgingNames.promises.getHistory) {
-          sendGetHistory(value)
+          sendGetHistory(value);
         } else if (type === BridgingNames.functions.redo) {
           redo();
         } else if (type === BridgingNames.functions.undo) {
-          undo()
+          undo();
         } else {
           sendOnError(
             "bridge_message_error",
@@ -693,19 +693,32 @@ export const htmlContent = ({
 
       // @sdk-internal
       function pushHistory(highlights) {
-        __MNST__.state.history = [
-          ...__MNST__.state.history.slice(0, __MNST__.state.historyIndex + 1), 
-          highlights
-        ];
-        __MNST__.state.historyIndex = __MNST__.state.history.length - 1;
-        sendOnHistoryChange("HISTORY", __MNST__.state.history, __MNST__.state.historyIndex);
+        // Anything the reader had stepped back from is dropped, the way typing
+        // after an undo does in an editor.
+        const kept = __MNST__.state.history.slice(0, __MNST__.state.historyIndex + 1);
+        kept.push(highlights);
+        // Bounded: every entry is a whole serialized payload, so a long reading
+        // session would otherwise grow one forever.
+        if (kept.length > ${HISTORY_LIMIT}) {
+          kept.shift();
+        }
+        __MNST__.state.history = kept;
+        __MNST__.state.historyIndex = kept.length - 1;
+        sendOnHistoryChange("HISTORY");
+      }
+
+      // @sdk-internal
+      function seedHistory(highlights) {
+        __MNST__.state.history = [highlights];
+        __MNST__.state.historyIndex = 0;
+        sendOnHistoryChange("HISTORY");
       }
 
       // @sdk-internal
       function redo() {
         if (__MNST__.state.historyIndex < __MNST__.state.history.length - 1) {
           __MNST__.state.historyIndex = __MNST__.state.historyIndex + 1;
-          sendOnHistoryChange("HISTORY_INDEX", __MNST__.state.history, __MNST__.state.historyIndex);
+          sendOnHistoryChange("HISTORY_INDEX");
           const highlights = __MNST__.state.history[__MNST__.state.historyIndex];
           updateHighlights(highlights, true);
         }
@@ -715,18 +728,23 @@ export const htmlContent = ({
       function undo() {
         if (__MNST__.state.historyIndex > 0) {
           __MNST__.state.historyIndex = __MNST__.state.historyIndex - 1;
-          sendOnHistoryChange("HISTORY_INDEX", __MNST__.state.history, __MNST__.state.historyIndex);
+          sendOnHistoryChange("HISTORY_INDEX");
           const highlights = __MNST__.state.history[__MNST__.state.historyIndex];
           updateHighlights(highlights, true);
         }
       }
 
       // @native-event
-      function sendOnHistoryChange(change, history, historyIndex) {
+      function sendOnHistoryChange(change) {
+        // Where the history stands, never the payloads themselves. This fires on
+        // every highlight, and each entry can be kilobytes; getHistory() is
+        // there for the rare caller that wants the entries.
         postMessage(BridgingNames.events.onHistoryChange, {
-          history,
-          historyIndex,
           change,
+          historyIndex: __MNST__.state.historyIndex,
+          length: __MNST__.state.history.length,
+          canUndo: __MNST__.state.historyIndex > 0,
+          canRedo: __MNST__.state.historyIndex < __MNST__.state.history.length - 1,
         });
       }
 
@@ -744,7 +762,7 @@ export const htmlContent = ({
           highlights: highlights,
           items: items,
         });
-        if (ignoreHistory) return
+        if (ignoreHistory) return;
         pushHistory(highlights);
       }
 
@@ -840,7 +858,7 @@ export const htmlContent = ({
         postMessage(BridgingNames.promises.getHistory, {
           promiseId,
           history: __MNST__.state.history,
-          historyIndex: __MNST__.state.historyIndex ,
+          historyIndex: __MNST__.state.historyIndex,
         });
       }
 
@@ -1636,7 +1654,14 @@ export const htmlContent = ({
 
         // null (not "") so that mounting without highlights stays a no-op —
         // an empty string means "clear", which would emit a spurious change event.
-        updateHighlights(${toScriptLiteral(highlights ?? INITIAL_HIGHLIGHTS)}, false);
+        updateHighlights(${toScriptLiteral(highlights ?? null)}, false);
+
+        // The state the reader opens with is the floor of the history, so undo
+        // stops here instead of stepping into a set that never existed. Mounting
+        // with highlights already recorded it, through the change it emitted.
+        if (__MNST__.state.history.length === 0) {
+          seedHistory(__MNST__.highlighter.serialize());
+        }
 
         if (__MNST__.platform.isAndroid) {
           document.addEventListener("message", function (event) {
