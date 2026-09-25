@@ -15,22 +15,23 @@ This page is the full surface. For a quick start see the
 | `css`                | Injected styles for layout and typography. Declared after the generated highlighter classes, so your rules win on equal specificity and can restyle or re-animate a highlight.                                                                                                           |
 | `fonts`              | WebView font setup via `googleFonts()`, `mergeFonts()`, or custom `preconnect`, `stylesheets`, and `@font-face` rules. Multiple families are supported in a single config.                                                                                                               |
 | `highlighters`       | Named highlight classes. A name must be a valid CSS class name — letters, digits, `-` and `_`, not starting with a digit — and invalid names are dropped with a console warning.                                                                                                         |
-| `highlights`         | **State prop.** Serialized highlights to restore. `undefined` leaves the current highlights untouched; an empty string clears them. Obtain the value from `getHighlights()` or `onHighlightsChange`. A value this view just emitted is ignored, so it is safe to control.                |
+| `initialHighlights`  | Serialized highlights painted when the view mounts — the string a previous session stored. Read once; changing it later does nothing (the view warns) and `setHighlights()` is how a mounted view is updated.                                                                            |
 | `highlighterOptions` | `ignoredElements` — tags or selectors such as `a`, `sup`, `.ignored`. Ignored nodes skip the visible highlight but stay selectable and copyable.                                                                                                                                         |
 | `options`            | Viewport zoom: `userScalable`, `initialScale`, `maximumScale`.                                                                                                                                                                                                                           |
 | `webViewProps`       | Pass-through to `react-native-webview`. `javaScriptEnabled`, `source`, and `onShouldStartLoadWithRequest` are owned by the component and cannot be overridden. `menuItems` and `onCustomMenuSelection` pass through untouched — see [Your own selection menu](#your-own-selection-menu). |
 
 ## Callbacks
 
-| Callback                                     | Fires when                                                                                                                                                                           |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `onTextSelectionChange(text)`                | The selection changes. Receives the selected text, or `""` when the selection is cleared.                                                                                            |
-| `onHighlightsChange(highlights, items)`      | The serialized highlight payload changes. Receives the payload to persist, plus the `HighlightData[]` it contains — no `getAllHighlightsData()` round-trip needed.                   |
-| `onLink(url)`                                | A link is tapped. Without this prop, `http(s)` URLs open through `Linking`.                                                                                                          |
-| `onError(error)`                             | The WebView SDK reports an error: `{ code, message, details }`. Try highlighting over an existing highlight for `overlapping_highlight`, or with no selection for `empty_selection`. |
-| `onHighlightPressed(highlight)`              | A highlight is tapped. Receives `{ id, name, text, rect, rects }`. Return a `className` to style the pressed highlight (define it in `css`), or return nothing to leave it unstyled. |
-| `onHighlightsVisibilityStateChange(visible)` | Highlight visibility changes. Receives `true` when visible, `false` when hidden.                                                                                                     |
-| `onCustomMessage(message)`                   | A script in the page calls `window.SelectableText.postMessage(type, data)`. Receives `{ type, data }`. See [Bridging custom actions](#bridging-custom-actions).                      |
+| Callback                                     | Fires when                                                                                                                                                                                                       |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `onTextSelectionChange(text)`                | The selection changes. Receives the selected text, or `""` when the selection is cleared.                                                                                                                        |
+| `onHighlightsChange(highlights, items)`      | The serialized highlight payload changes. Receives the payload to persist, plus the `HighlightData[]` it contains — no `getAllHighlightsData()` round-trip needed.                                               |
+| `onHistoryChange(state)`                     | The undo history moves. Receives `{ change, history, historyIndex, length, canUndo, canRedo }`, so undo and redo controls can enable themselves without tracking anything — see [Undo and redo](#undo-and-redo). |
+| `onLink(url)`                                | A link is tapped. Without this prop, `http(s)` URLs open through `Linking`.                                                                                                                                      |
+| `onError(error)`                             | The WebView SDK reports an error: `{ code, message, details }`. Try highlighting over an existing highlight for `overlapping_highlight`, or with no selection for `empty_selection`.                             |
+| `onHighlightPressed(highlight)`              | A highlight is tapped. Receives `{ id, name, text, rect, rects }`. Return a `className` to style the pressed highlight (define it in `css`), or return nothing to leave it unstyled.                             |
+| `onHighlightsVisibilityStateChange(visible)` | Highlight visibility changes. Receives `true` when visible, `false` when hidden.                                                                                                                                 |
+| `onCustomMessage(message)`                   | A script in the page calls `window.SelectableText.postMessage(type, data)`. Receives `{ type, data }`. See [Bridging custom actions](#bridging-custom-actions).                                                  |
 
 A callback that throws is caught and logged rather than crashing the bridge, so
 a bug in your handler will not take the component down with it.
@@ -77,28 +78,94 @@ afterwards does not update them, so dismiss or re-anchor whatever you placed:
 `onTextSelectionChange` and a `webViewProps.onScroll` handler are the usual
 hooks for that.
 
-### Controlling the highlights
+### Restoring, replacing and undoing
 
-`onHighlightsChange` hands you both halves of the state at once, so the usual
-wiring is a plain controlled component:
+Highlights travel as one serialized string. Persist what `onHighlightsChange`
+reports, and hand it back on the next mount:
 
 ```tsx
-const [highlights, setHighlights] = useState("");
-const [items, setItems] = useState<HighlightData[]>([]);
+const [saved, setSaved] = useState<string | undefined>(undefined);
+
+useEffect(() => {
+  AsyncStorage.getItem("highlights").then((value) => setSaved(value ?? ""));
+}, []);
+
+// Wait for storage: the prop is read once, when the view mounts.
+if (saved === undefined) return <Spinner />;
 
 <SelectableTextView
-  highlights={highlights}
-  onHighlightsChange={(serialized, list) => {
-    setHighlights(serialized);
-    setItems(list); // ids, names and text — already resolved
+  initialHighlights={saved}
+  onHighlightsChange={(serialized, items) => {
+    AsyncStorage.setItem("highlights", serialized);
+    setItems(items); // ids, names and text — already resolved
   }}
 />;
 ```
 
-Passing the emitted value straight back does **not** replay the highlights: the
-view remembers the last payload it reported and skips restoring an echo of it.
-Restoring is reserved for a payload it did not produce — a value loaded from
-storage, a different document, or `""` to clear.
+To replace the highlights of a view that is already on screen, call the ref:
+
+```tsx
+ref.current?.setHighlights(payload); // "" clears them
+```
+
+Those are the two halves on purpose. `initialHighlights` is the document the
+reader opens with; `setHighlights` is every change after that. A single prop
+doing both is what made restoring unpredictable: it had to guess which values
+were genuine and which were the view's own report coming back around.
+
+#### Undo and redo
+
+The page keeps the history itself — every content change, in order — and reports
+where it stands:
+
+```tsx
+const [history, setHistory] = useState({ canUndo: false, canRedo: false });
+
+<SelectableTextView onHistoryChange={setHistory} ... />;
+
+<Button title="Undo" disabled={!history.canUndo} onPress={() => ref.current?.undo()} />
+<Button title="Redo" disabled={!history.canRedo} onPress={() => ref.current?.redo()} />
+```
+
+`onHistoryChange` receives `{ change, history, historyIndex, length, canUndo,
+canRedo }`. `change` says what moved: `"HISTORY"` when an entry was recorded or
+the history was reset, `"HISTORY_INDEX"` when `undo()` or `redo()` stepped
+through the entries it already had. `history` carries the entries themselves, so
+a consumer that mirrors them does not have to ask;
+[`getHistory()`](#reading-state) reads the same state outside of a change.
+
+What is recorded: highlighting, unhighlighting, clearing and `setHighlights`.
+Showing, hiding and focusing are not — they are presentation, and an undo that
+un-hid highlights would surprise. Making a new change after an undo drops what
+was ahead, the way an editor does, and undoing with nothing behind you does
+nothing at all: `onHistoryChange` is how a button knows to disable itself, so
+there is no error to handle.
+
+Stepping through the history does **not** replay a highlight's entrance
+animation. An undo restores something the reader has already seen; announcing it
+as new would misread the gesture.
+
+Each step still reports through `onHighlightsChange`, because an undo does
+change what the content holds — whatever you persist stays in step with it.
+
+The history holds the last 50 states, oldest dropped first: every entry is a
+whole serialized payload, so it is bounded on purpose.
+
+```tsx
+ref.current?.clearHistory(); // start again from what is on screen
+```
+
+`clearHistory()` forgets every recorded state and restarts from the current one:
+nothing to undo, nothing to redo, highlights untouched. It is for the moments
+after which going back makes no sense — the highlights were just saved, or a
+screen handed the view a different set to work on.
+
+#### When a payload is refused
+
+`setHighlights` (and `initialHighlights`) take a string this view produced. Hand
+it something else and it is refused through `onError` with `invalid_highlight`,
+**without touching the highlights already on screen** — a bad payload costs the
+reader nothing. `details` carries the reason, including the offending string.
 
 ## Ref API
 
@@ -117,6 +184,9 @@ reported through `onError` instead, so a call site does not need its own
 - **`unhighlightSelection(options?)`** — removes the highlights the cached selection touches.
 - **`unhighlightById(id, options?)`** — removes a single highlight.
 - **`clearHighlights()`** — removes every highlight from the content, immediately.
+- **`setHighlights(highlights)`** — replaces every highlight with the ones a serialized payload describes; `""` clears them. A payload that does not belong to this content is reported through `onError` with `invalid_highlight`.
+- **`undo()`** / **`redo()`** — step through the history described in [Undo and redo](#undo-and-redo).
+- **`clearHistory()`** — forget the recorded states and start again from what is on screen.
 
 #### `UnhighlightOptions`
 
@@ -144,7 +214,7 @@ behind the platform's selection UI; what gets removed when the wait ends is that
 set, not whatever happens to be selected by then.
 
 Note that anything which replaces the whole highlight set — `clearHighlights()`,
-or a new value on the `highlights` prop — cancels a running exit animation and
+or a new payload through `setHighlights()` — cancels a running exit animation and
 removes the highlights at once. State that resets eagerly on its own will
 therefore outrun an animation you staged.
 
@@ -167,9 +237,10 @@ ref.current?.highlightSelection("yellow", { keepSelection: true });
 ### Reading state
 
 - **`getSelectedText(): Promise<string>`** — the cached selected text.
-- **`getHighlights(): Promise<string>`** — the serialized highlights string, suitable for the `highlights` prop.
+- **`getHighlights(): Promise<string>`** — the serialized highlights string, for storage, `initialHighlights` or `setHighlights()`.
 - **`getAllHighlightsData(): Promise<HighlightData[]>`** — an array of `{ id, name, text }` for every highlight.
 - **`getHighlightsVisibilityState(): Promise<boolean>`** — `true` when highlights are visible.
+- **`getHistory(): Promise<HistoryState>`** — the recorded states and where the content sits among them: `{ history, historyIndex, length, canUndo, canRedo }`.
 
 ### Focus and visibility
 
@@ -332,7 +403,7 @@ injected as-is, so it can be shared by several highlighters.
 `iterationCount` decides what kind of animation it is:
 
 - **A number** makes it an **entrance**. It plays once when the highlight
-  appears — created from a selection, or restored through the `highlights` prop
+  appears — created from a selection, or restored through `initialHighlights`
   — and never again. Focusing and unfocusing the highlight, tapping elsewhere,
   hiding and showing highlights, or cancelling an exit do not replay it. If the
   highlight is focused or starts exiting while its entrance is still running,

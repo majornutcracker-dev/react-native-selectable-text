@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-24
+
+> **Read this before upgrading.** The `highlights` prop is gone, so code that
+> passes it no longer compiles. Rename it to `initialHighlights` for the value
+> the view mounts with, and call `setHighlights()` for every change after that.
+> The replacement is not a drop-in: `initialHighlights` is read **once**, when
+> the content is built, and changing it later does nothing.
+>
+> ```diff
+> - <SelectableTextView highlights={saved} />
+> + <SelectableTextView initialHighlights={saved} />
+> + // later: ref.current?.setHighlights(payload)
+> ```
+
+### Added
+
+- `setHighlights(payload)` on the ref replaces every highlight in a mounted
+  view; `""` clears them.
+- An undo history, kept by the view itself: `undo()`, `redo()` and
+  `clearHistory()` on the ref, and `getHistory()` to read it.
+- `onHistoryChange`, which reports where the history stands — including
+  `canUndo` and `canRedo` — so undo and redo controls enable themselves without
+  tracking anything. The history records content changes only (highlighting,
+  unhighlighting, clearing and `setHighlights`) and holds the last 50 states.
+- `initialHighlights`, the serialized highlights painted when the view mounts.
+
+### Changed
+
+- A payload that is not a serialized highlights string is now refused through
+  `onError` with `invalid_highlight` **without touching the highlights already
+  on screen**. It used to remove them first and fail afterwards, so a bad
+  string cost the reader their highlights.
+- Stepping through the history no longer replays a highlight's entrance
+  animation: an undo restores something the reader has already seen.
+
+### Removed
+
+- The `highlights` prop, replaced as described above. It was both the mount
+  value and a controlled state prop, which meant the view had to guess which
+  values were genuine and which were its own report coming back — restoring
+  through it was unpredictable, and undo on top of it needed a stack, an echo
+  flag and string-identity reasoning in every consumer.
+
 ## [1.1.0] - 2026-09-23
 
 ### Changed
@@ -48,6 +91,7 @@ Initial release.
 - Font helpers (`googleFonts()`, `mergeFonts()`), ignored elements, and viewport
   zoom options.
 
-[unreleased]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.1.0...HEAD
+[unreleased]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/majornutcracker-dev/react-native-selectable-text/releases/tag/v1.0.0

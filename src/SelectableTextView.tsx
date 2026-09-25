@@ -14,6 +14,8 @@ import {
   type FocusHighlightOptions,
   type UnhighlightOptions,
   type EvaluateJavaScriptOptions,
+  type HistoryChange,
+  type HistoryState,
 } from "./types";
 import { generatePromiseId, htmlContent } from "./utils";
 import { Linking, Platform } from "react-native";
@@ -35,13 +37,28 @@ export type SelectableTextViewProps = SelectableTextViewPropsBase & {
   >;
 };
 
+/**
+ * The page reports the history the same way in its event and in its answer to
+ * `getHistory`, so both are read here rather than in two places that could
+ * drift apart.
+ */
+function readHistoryState(value: any): HistoryState {
+  return {
+    history: (value?.history ?? []) as Highlights[],
+    historyIndex: Number(value?.historyIndex ?? 0),
+    length: Number(value?.length ?? 0),
+    canUndo: Boolean(value?.canUndo),
+    canRedo: Boolean(value?.canRedo),
+  };
+}
+
 const SelectableTextView = React.forwardRef<
   SelectableTextViewRef,
   SelectableTextViewProps
 >((props, ref) => {
   const {
     highlighters,
-    highlights,
+    initialHighlights,
     content,
     css,
     fonts,
@@ -54,6 +71,7 @@ const SelectableTextView = React.forwardRef<
     onHighlightPressed,
     onHighlightsVisibilityStateChange,
     onCustomMessage,
+    onHistoryChange,
     webViewProps,
   } = props;
   const promises = React.useRef<Record<string, PendingPromise>>({});
@@ -75,12 +93,6 @@ const SelectableTextView = React.forwardRef<
 
   const webviewRef = React.useRef<WebView>(null);
 
-  // The last payload this view reported through onHighlightsChange, seeded with
-  // the value baked into the HTML so the very first echo is recognised too.
-  const lastEmittedHighlights = React.useRef<Highlights | undefined>(
-    highlights
-  );
-
   // Which selection the last getSelectedText() read, so an action decided on
   // that text can refuse to land on a different one.
   const lastSelectionVersion = React.useRef<number | undefined>(undefined);
@@ -95,7 +107,7 @@ const SelectableTextView = React.forwardRef<
   const finalSource = React.useRef({
     html: htmlContent({
       hl: highlighters,
-      h: highlights,
+      h: initialHighlights,
       c: content,
       css: css,
       f: fonts,
@@ -125,9 +137,6 @@ const SelectableTextView = React.forwardRef<
       try {
         if (data.type === BridgingNames.events.onHighlightsChange) {
           const serialized = (data.value?.highlights ?? "") as Highlights;
-          // Remembered so the effect below can tell a genuine restore request
-          // from the consumer echoing back what this view just reported.
-          lastEmittedHighlights.current = serialized;
           onHighlightsChange?.(
             serialized,
             (data.value?.items ?? []) as HighlightData[]
@@ -259,6 +268,15 @@ const SelectableTextView = React.forwardRef<
           if (typeof message?.type === "string") {
             onCustomMessage?.({ type: message.type, data: message.data });
           }
+        } else if (data.type === BridgingNames.events.onHistoryChange) {
+          onHistoryChange?.({
+            ...readHistoryState(data.value),
+            change: data.value.change as HistoryChange,
+          });
+        } else if (data.type === BridgingNames.promises.getHistory) {
+          const id = data.value.promiseId;
+          promises.current[id]?.resolve(readHistoryState(data.value));
+          settlePromise(id);
         }
       } catch (error) {
         // A consumer callback threw or rejected. This handler is async, so
@@ -300,26 +318,6 @@ const SelectableTextView = React.forwardRef<
     },
     [onLink]
   );
-
-  const isFirstHighlightsEffect = React.useRef(true);
-  React.useEffect(() => {
-    // The initial value is already baked into the generated HTML; re-posting it
-    // would replay the highlights and emit a redundant change event.
-    if (isFirstHighlightsEffect.current) {
-      isFirstHighlightsEffect.current = false;
-      return;
-    }
-    // Echo of this view's own last change event: restoring it would wipe and
-    // re-deserialize the highlights the content already has, dropping the focus
-    // style and looping back through onHighlightsChange.
-    if (highlights === lastEmittedHighlights.current) {
-      return;
-    }
-    _postMessage({
-      type: BridgingNames.functions.updateHighlights,
-      value: highlights,
-    });
-  }, [highlights]);
 
   React.useEffect(() => {
     return () => {
@@ -457,6 +455,37 @@ const SelectableTextView = React.forwardRef<
   const toggleHighlightsVisibility = () =>
     _request<boolean>(BridgingNames.promises.toggleHighlightsVisibility);
 
+  const setHighlights = (highlights: Highlights) => {
+    _postMessage({
+      type: BridgingNames.functions.updateHighlights,
+      value: highlights,
+    });
+  };
+
+  const undo = () => {
+    _postMessage({
+      type: BridgingNames.functions.undo,
+      value: null,
+    });
+  };
+
+  const redo = () => {
+    _postMessage({
+      type: BridgingNames.functions.redo,
+      value: null,
+    });
+  };
+
+  const clearHistory = () => {
+    _postMessage({
+      type: BridgingNames.functions.clearHistory,
+      value: null,
+    });
+  };
+
+  const getHistory = () =>
+    _request<HistoryState>(BridgingNames.promises.getHistory);
+
   const evaluateJavaScript = <T,>(
     script: string,
     options?: EvaluateJavaScriptOptions
@@ -508,6 +537,11 @@ const SelectableTextView = React.forwardRef<
     getHighlightsVisibilityState,
     toggleHighlightsVisibility,
     evaluateJavaScript,
+    setHighlights,
+    undo,
+    redo,
+    clearHistory,
+    getHistory,
   }));
 
   return (

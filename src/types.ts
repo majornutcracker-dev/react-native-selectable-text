@@ -297,6 +297,40 @@ export interface SelectableTextViewError extends Error {
   code: SelectableTextViewErrorCode;
 }
 
+/**
+ * What moved: a new entry was recorded (`HISTORY`), or the view stepped through
+ * the entries it already had (`HISTORY_INDEX`, from `undo()` or `redo()`).
+ */
+export type HistoryChange = "HISTORY" | "HISTORY_INDEX";
+
+/**
+ * Where the undo history stands, reported on every change. It carries the whole
+ * state — the entries included — so a consumer that mirrors the history does
+ * not have to ask for it; {@link SelectableTextViewRef.getHistory} is for
+ * reading it outside of a change.
+ *
+ * The entries are whole serialized payloads, which is why the history stops at
+ * {@link HISTORY_LIMIT}: it bounds both the memory and this message.
+ */
+export type HistoryChangeEvent = HistoryState & {
+  change: HistoryChange;
+};
+
+/** The whole history, as {@link SelectableTextViewRef.getHistory} returns it. */
+export interface HistoryState {
+  history: Highlights[];
+  historyIndex: number;
+  /**
+   * How many entries the history holds, the state the view mounted with
+   * included. It stops growing at {@link HISTORY_LIMIT}, dropping the oldest.
+   */
+  length: number;
+  /** Whether {@link SelectableTextViewRef.undo} would do anything. */
+  canUndo: boolean;
+  /** Whether {@link SelectableTextViewRef.redo} would do anything. */
+  canRedo: boolean;
+}
+
 export type SelectableTextViewRef = {
   /**
    * A function that applies highlighting to the current selection with a highlighter name previously defined in the highlighters property;
@@ -333,6 +367,51 @@ export type SelectableTextViewRef = {
    * A function that removes all the highlights
    */
   clearHighlights: () => void;
+  /**
+   * Replaces every highlight in the content with the ones a serialized payload
+   * describes — the way to restore after mount, where `initialHighlights` no
+   * longer applies.
+   *
+   * An empty string clears them, which is what `clearHighlights()` does. A
+   * payload that does not belong to this content is reported through `onError`
+   * with `invalid_highlight` rather than throwing.
+   * @param highlights A payload from `getHighlights()` or `onHighlightsChange`.
+   * @throws js Error
+   */
+  setHighlights: (highlights: Highlights) => void;
+  /**
+   * Steps back to the previous set of highlights. Does nothing when there is
+   * nothing to go back to — {@link SelectableTextViewProps.onHistoryChange}
+   * reports when that is the case, so a button can disable itself.
+   *
+   * The history records content changes only: highlighting, unhighlighting,
+   * clearing and `setHighlights`. Showing, hiding and focusing are left out,
+   * since an undo that un-hid highlights would be a surprise.
+   *
+   */
+  undo: () => void;
+  /**
+   * Steps forward again after an {@link SelectableTextViewRef.undo}. Making a
+   * new change instead drops whatever was ahead, as editors do.
+   */
+  redo: () => void;
+  /**
+   * Forgets every recorded state and starts the history again from what the
+   * content holds right now, the way it stood when the view mounted: nothing
+   * to undo, nothing to redo, and the highlights left exactly as they are.
+   *
+   * For the moments after which going back makes no sense — the highlights
+   * were just saved, or a screen handed the view a different set to work on.
+   */
+  clearHistory: () => void;
+  /**
+   * Reads the undo history itself — every payload it holds and which one the
+   * content is on. {@link SelectableTextViewProps.onHistoryChange} already
+   * reports whether a step exists, so this is for the callers that want the
+   * entries: a history panel, a diff, a save of the whole session.
+   * @throws js Error
+   */
+  getHistory: () => Promise<HistoryState>;
   /**
    * A promise that returns the selected text
    * @throws js Error
@@ -453,16 +532,16 @@ export type SelectableTextViewPropsBase = {
    */
   highlighters?: Highlighter[];
   /**
-   * --> State property
-   * A serialized string that represents the current highlights in the content. This can be used to restore the highlights when the component is re-rendered, for example when the user navigates away from the screen and then comes back.
-   * You can obtain this string from getHighlights method or onHighlightsChange event.
-   * You can also use as a state, the content will be re-rendered with the highlights applied whenever this string changes.
+   * --> Final property
+   * The serialized highlights to paint on mount — the string a previous session
+   * stored, from `getHighlights()` or `onHighlightsChange`.
    *
-   * A value the view itself just emitted through `onHighlightsChange` is ignored, so
-   * storing that value in state and passing it straight back is safe and will not
-   * replay the highlights.
+   * It is read once, when the content is built. Changing it afterwards does
+   * nothing: use {@link SelectableTextViewRef.setHighlights} to replace the
+   * highlights of a mounted view, and remount the component to start from a
+   * different document.
    */
-  highlights?: Highlights;
+  initialHighlights?: Highlights;
   /**
    * --> Final property
    * A html string that will be rendered in the WebView.
@@ -558,6 +637,14 @@ export type SelectableTextViewPropsBase = {
    * @param message The `type` and `data` the page sent.
    */
   onCustomMessage?: (message: CustomMessage) => void;
+
+  /**
+   * Called when the undo history moves, so the controls that drive it can
+   * enable and disable themselves without keeping their own copy of it.
+   *
+   * Fires on every recorded change and on each `undo()` / `redo()`.
+   */
+  onHistoryChange?: (event: HistoryChangeEvent) => void;
 };
 
 export type Message = {
@@ -575,6 +662,9 @@ export const BridgingNames = {
     focusHighlight: "focusHighlight",
     unfocusHighlight: "unfocusHighlight",
     unhighlightById: "unhighlightById",
+    redo: "redo",
+    undo: "undo",
+    clearHistory: "clearHistory",
   },
   // out
   events: {
@@ -584,6 +674,7 @@ export const BridgingNames = {
     onHighlightPressed: "onHighlightPressed",
     onHighlightsVisibilityStateChange: "onHighlightsVisibilityStateChange",
     onCustomMessage: "onCustomMessage",
+    onHistoryChange: "onHistoryChange",
     // dev
     log: "log",
   },
@@ -595,7 +686,15 @@ export const BridgingNames = {
     getHighlightsVisibilityState: "getHighlightsVisibilityState",
     toggleHighlightsVisibility: "toggleHighlightsVisibility",
     evaluateJavaScript: "evaluateJavaScript",
+    getHistory: "getHistory",
   },
 };
 
-export const VERSION = "1.1.0";
+/**
+ * How many states the undo history keeps. Every entry is a whole serialized
+ * payload, and a reader can produce a great many in one sitting, so the oldest
+ * are dropped rather than held forever.
+ */
+export const HISTORY_LIMIT = 50;
+
+export const VERSION = "1.2.0";

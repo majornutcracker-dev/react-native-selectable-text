@@ -6,7 +6,7 @@ import {
   serializer,
   textRange,
 } from "./rangy@1.3.2";
-import { BridgingNames } from "./types";
+import { BridgingNames, HISTORY_LIMIT } from "./types";
 import type {
   Highlighter,
   AnimationOptions,
@@ -573,6 +573,8 @@ export const htmlContent = ({
         window.__MNST__ = {
           // state
           state: {
+            history: [],
+            historyIndex: -1,
             focusedElements: [],
             visible: true,
             // id -> timer, for removals waiting on an exit animation.
@@ -621,7 +623,7 @@ export const htmlContent = ({
       // @native-receiver
       function onMessage(type, value) {
         if (type === BridgingNames.functions.updateHighlights) {
-          updateHighlights(value); // highlights
+          updateHighlights(value, false); // highlights
         } else if (type === BridgingNames.functions.highlightSelection) {
           // { name, keepSelection, expectSelectionVersion }
           highlightSelection(
@@ -651,6 +653,14 @@ export const htmlContent = ({
           toggleHighlightsVisibility(value); // promiseId
         } else if (type === BridgingNames.promises.evaluateJavaScript) {
           evaluateJavaScript(value); // { promiseId, script }
+        } else if (type === BridgingNames.promises.getHistory) {
+          sendGetHistory(value);
+        } else if (type === BridgingNames.functions.redo) {
+          redo();
+        } else if (type === BridgingNames.functions.undo) {
+          undo();
+        } else if (type === BridgingNames.functions.clearHistory) {
+          clearHistory();
         } else {
           sendOnError(
             "bridge_message_error",
@@ -683,8 +693,84 @@ export const htmlContent = ({
         }));
       }
 
+      // @sdk-internal
+      function pushHistory(highlights) {
+        // Anything the reader had stepped back from is dropped, the way typing
+        // after an undo does in an editor.
+        const kept = __MNST__.state.history.slice(0, __MNST__.state.historyIndex + 1);
+        kept.push(highlights);
+        // Bounded: every entry is a whole serialized payload, so a long reading
+        // session would otherwise grow one forever.
+        if (kept.length > ${HISTORY_LIMIT}) {
+          kept.shift();
+        }
+        __MNST__.state.history = kept;
+        __MNST__.state.historyIndex = kept.length - 1;
+        sendOnHistoryChange("HISTORY");
+      }
+
+      // @sdk-internal
+      function clearHistory() {
+        // Starts again from what is on screen, so undo has a floor to stop at —
+        // the same state a freshly mounted view starts with.
+        let current = "";
+        try {
+          current = __MNST__.highlighter.serialize();
+        } catch (e) {
+          current = "";
+        }
+        seedHistory(current);
+      }
+
+      // @sdk-internal
+      function seedHistory(highlights) {
+        __MNST__.state.history = [highlights];
+        __MNST__.state.historyIndex = 0;
+        sendOnHistoryChange("HISTORY");
+      }
+
+      // @sdk-internal
+      function redo() {
+        if (__MNST__.state.historyIndex < __MNST__.state.history.length - 1) {
+          __MNST__.state.historyIndex = __MNST__.state.historyIndex + 1;
+          sendOnHistoryChange("HISTORY_INDEX");
+          const highlights = __MNST__.state.history[__MNST__.state.historyIndex];
+          updateHighlights(highlights, true);
+        }
+      }
+
+      // @sdk-internal
+      function undo() {
+        if (__MNST__.state.historyIndex > 0) {
+          __MNST__.state.historyIndex = __MNST__.state.historyIndex - 1;
+          sendOnHistoryChange("HISTORY_INDEX");
+          const highlights = __MNST__.state.history[__MNST__.state.historyIndex];
+          updateHighlights(highlights, true);
+        }
+      }
+
+      // @sdk-internal
+      function historyState() {
+        // One shape for both the event and getHistory, so the two can never
+        // disagree about where the history stands.
+        return {
+          history: __MNST__.state.history,
+          historyIndex: __MNST__.state.historyIndex,
+          length: __MNST__.state.history.length,
+          canUndo: __MNST__.state.historyIndex > 0,
+          canRedo: __MNST__.state.historyIndex < __MNST__.state.history.length - 1,
+        };
+      }
+
       // @native-event
-      function sendOnHighlightChange(highlights) {
+      function sendOnHistoryChange(change) {
+        const state = historyState();
+        state.change = change;
+        postMessage(BridgingNames.events.onHistoryChange, state);
+      }
+
+      // @native-event
+      function sendOnHighlightChange(highlights, ignoreHistory) {
         // The items are already in memory at this point, so they ride along and
         // save the consumer a getAllHighlightsData() round-trip per change.
         let items = [];
@@ -697,6 +783,8 @@ export const htmlContent = ({
           highlights: highlights,
           items: items,
         });
+        if (ignoreHistory) return;
+        pushHistory(highlights);
       }
 
       // @native-event
@@ -784,6 +872,13 @@ export const htmlContent = ({
       // @native-event
       function sendOnHighlightsVisibilityStateChange(visibilityState) {
         postMessage(BridgingNames.events.onHighlightsVisibilityStateChange, visibilityState);
+      }
+
+      // @native-promise-resolve
+      function sendGetHistory(promiseId) {
+        const state = historyState();
+        state.promiseId = promiseId;
+        postMessage(BridgingNames.promises.getHistory, state);
       }
 
       // @native-promise-resolve
@@ -889,12 +984,32 @@ export const htmlContent = ({
       // <------------------------ Internal functions ------------------------------->
 
       // @sdk-internal-with-event
-      function updateHighlights(highlights) {
-        // \`highlights\` is a state prop: null/undefined means "leave as is",
-        // while an empty string means "clear everything". Treating "" as a
-        // no-op would make the prop impossible to reset.
+      function updateHighlights(highlights, fromHistory) {
+        // \`null\`/\`undefined\` means "leave as is", while an empty string means
+        // "clear everything". Treating "" as a no-op would make the highlights
+        // impossible to reset.
         if (highlights == null) {
           return;
+        }
+        // Refused before anything is touched: a payload that is not one cannot
+        // cost the reader the highlights they already have.
+        // Rangy looks at the same first segment, and throws when it is missing.
+        const payloadType = String(highlights).split("|")[0];
+        if (highlights && !/^type:[A-Za-z0-9_]+$/.test(payloadType)) {
+          sendOnError(
+            "invalid_highlight",
+            "Failed to restore highlights",
+            "Not a serialized highlights payload: " + String(highlights).slice(0, 60)
+          );
+          return;
+        }
+        // What the content holds right now, to put back if the payload turns
+        // out to be unusable halfway through deserializing it.
+        let previous = null;
+        try {
+          previous = __MNST__.highlighter.serialize();
+        } catch (e) {
+          previous = null;
         }
         try {
           clearHighlightFocusStyle();
@@ -904,15 +1019,44 @@ export const htmlContent = ({
             __MNST__.highlighter.deserialize(highlights);
           }
           reconcileIgnoredElements();
-          // Every highlight here is new — the old ones were just removed — so
-          // restored highlights play their entrance once, as they did before.
-          markEntering(__MNST__.highlighter.highlights || []);
+          if (!fromHistory) {
+            // Every highlight here is new — the old ones were just removed — so
+            // restored highlights play their entrance once, as they did before.
+            //
+            // Stepping through the history is the exception: an undo puts back
+            // a state the reader has already seen, and replaying the entrance
+            // would announce it as something that just happened.
+            markEntering(__MNST__.highlighter.highlights || []);
+          }
           applyHighlightVisibilityClass(false, true);
-          sendOnHighlightChange(__MNST__.highlighter.serialize());
+          sendOnHighlightChange(__MNST__.highlighter.serialize(), fromHistory);
         } catch (e) {
+          rollbackHighlights(previous);
           sendOnError(
             "invalid_highlight",
             "Failed to restore highlights",
+            e?.message ?? String(e)
+          );
+        }
+      }
+
+      // @sdk-internal
+      function rollbackHighlights(previous) {
+        // Deserializing can fail partway, leaving some of the payload applied,
+        // so the content is put back rather than left in between. No change
+        // event: as far as the consumer is concerned nothing happened, and the
+        // history must not record a state the reader never saw.
+        try {
+          __MNST__.highlighter.removeAllHighlights();
+          if (previous) {
+            __MNST__.highlighter.deserialize(previous);
+          }
+          reconcileIgnoredElements();
+          applyHighlightVisibilityClass(false, true);
+        } catch (e) {
+          sendOnError(
+            "invalid_highlight",
+            "Failed to restore the previous highlights",
             e?.message ?? String(e)
           );
         }
@@ -1578,7 +1722,14 @@ export const htmlContent = ({
 
         // null (not "") so that mounting without highlights stays a no-op —
         // an empty string means "clear", which would emit a spurious change event.
-        updateHighlights(${toScriptLiteral(highlights ?? null)});
+        updateHighlights(${toScriptLiteral(highlights ?? null)}, false);
+
+        // The state the reader opens with is the floor of the history, so undo
+        // stops here instead of stepping into a set that never existed. Mounting
+        // with highlights already recorded it, through the change it emitted.
+        if (__MNST__.state.history.length === 0) {
+          seedHistory(__MNST__.highlighter.serialize());
+        }
 
         if (__MNST__.platform.isAndroid) {
           document.addEventListener("message", function (event) {

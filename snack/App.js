@@ -29,8 +29,9 @@ const article = `
     so a popover can be anchored without measuring anything yourself.
   </p>
   <p>
-    Try it: highlight a few passages, press the bin to clear them, then press
-    undo to bring them back from the saved string.
+    Try it: highlight a few passages, press the bin to clear them, then undo —
+    and redo. The view keeps the history, so the buttons below only have to ask
+    for it.
   </p>
 `;
 
@@ -59,26 +60,9 @@ function Demo() {
   const ref = useRef(null);
 
   const [current, setCurrent] = useState("amber");
-  const [highlights, setHighlights] = useState(undefined);
   const [count, setCount] = useState(0);
-  const [depth, setDepth] = useState(0);
+  const [history, setHistory] = useState({ canUndo: false, canRedo: false });
   const [status, setStatus] = useState("Select some text to begin");
-
-  /**
-   * Every payload the view has reported, oldest first — an undo history rather
-   * than a single slot. A ref, not state: pushing must not re-render, and the
-   * handlers have to read the current stack, not the one their closure was
-   * created with.
-   *
-   * Popping matters for more than history. The view ignores a payload it just
-   * emitted, and React skips an effect when the prop value is unchanged, so
-   * restoring the *same* string twice does nothing either way. Each pop hands
-   * over a different, older payload, so the prop always changes and the view
-   * always acts.
-   */
-  const history = useRef([]);
-  /** The payload a restore just pushed back in, so it is not re-recorded. */
-  const restoring = useRef(null);
 
   return (
     <View style={styles.screen}>
@@ -91,7 +75,6 @@ function Demo() {
           content={article}
           css={css}
           highlighters={highlighters}
-          highlights={highlights}
           webViewProps={{
             style: styles.webview,
             menuItems: [
@@ -115,20 +98,10 @@ function Demo() {
           }}
           onHighlightsChange={(serialized, items) => {
             setCount(items.length);
-
-            // The echo of a restore: it is already in the history, one step
-            // further back. Recording it again would undo the undo.
-            if (serialized === restoring.current) {
-              restoring.current = null;
-              return;
-            }
-            // Clearing reports an empty payload; there is nothing to go back
-            // to in it, and it would sit in the way of the real ones.
-            if (items.length === 0) return;
-
-            history.current.push(serialized);
-            setDepth(history.current.length);
+            // A real app stores this — AsyncStorage, SQLite, an API — and hands
+            // it back through `initialHighlights` the next time the screen opens.
           }}
+          onHistoryChange={setHistory}
           onHighlightPressed={(highlight) => {
             setStatus(`Tapped: "${highlight.text.slice(0, 36)}"`);
           }}
@@ -153,17 +126,17 @@ function Demo() {
           ref.current?.clearHighlights();
           setStatus("Cleared — undo brings them back");
         }}
-        onRestore={() => {
-          const previous = history.current.pop();
-          setDepth(history.current.length);
-          if (previous === undefined) return;
-
-          restoring.current = previous;
-          setHighlights(previous);
-          setStatus(`Restored — ${history.current.length} step(s) left`);
+        onUndo={() => {
+          ref.current?.undo();
+          setStatus("Undone");
+        }}
+        onRedo={() => {
+          ref.current?.redo();
+          setStatus("Redone");
         }}
         onToggle={() => ref.current?.toggleHighlightsVisibility()}
-        canRestore={depth > 0}
+        canUndo={history.canUndo}
+        canRedo={history.canRedo}
         status={status}
         bottomInset={insets.bottom}
       />
