@@ -4,13 +4,13 @@ plugins {
 }
 
 group = 'com.majornutcracker.reactnativeselectablewebview'
-version = '1.2.0'
+version = '1.2.1'
 
 android {
   namespace "com.majornutcracker.reactnativeselectablewebview"
   defaultConfig {
-    versionCode 3
-    versionName "1.2.0"
+    versionCode 4
+    versionName "1.2.1"
   }
   lintOptions {
     abortOnError false

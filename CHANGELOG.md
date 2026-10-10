@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-09
+
+### Fixed
+
+- The `author` field carried a bare name where npm expects a URL, so the
+  registry stored `"url": "JoshuaPariona"` and React Native Directory linked the
+  author to a page that does not exist. It now points at the GitHub profile.
+
+### Changed
+
+- The README's installation section lists `npx expo install`, npm, yarn, pnpm
+  and bun, each in its own block so every command gets its own copy button.
+
 ## [1.2.0] - 2026-09-24
 
 > **Read this before upgrading.** The `highlights` prop is gone, so code that
@@ -91,7 +104,8 @@ Initial release.
 - Font helpers (`googleFonts()`, `mergeFonts()`), ignored elements, and viewport
   zoom options.
 
-[unreleased]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.2.0...HEAD
+[unreleased]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/majornutcracker-dev/react-native-selectable-text/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/majornutcracker-dev/react-native-selectable-text/releases/tag/v1.0.0
