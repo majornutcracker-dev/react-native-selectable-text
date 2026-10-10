@@ -58,13 +58,34 @@ highlight.
 
 ## Installation
 
+In an Expo project, let the CLI pick the version that matches your SDK:
+
+```sh
+npx expo install @majornutcracker/react-native-selectable-text react-native-webview
 ```
+
+Or install it directly, with whichever package manager the project uses:
+
+```sh
 npm install @majornutcracker/react-native-selectable-text
+```
+
+```sh
+yarn add @majornutcracker/react-native-selectable-text
+```
+
+```sh
+pnpm add @majornutcracker/react-native-selectable-text
+```
+
+```sh
+bun add @majornutcracker/react-native-selectable-text
 ```
 
 This is an Expo module. In bare React Native projects,
 [install and configure `expo`](https://docs.expo.dev/bare/installing-expo-modules/)
-first, then run `npx pod-install`.
+first, then run `npx pod-install`. Expo Go needs nothing else: the native module
+is optional and `react-native-webview` already ships inside it.
 
 **Peer dependencies:** `expo`, `react`, `react-native`, and
 `react-native-webview` `^13.16.1` (`>=13.16.1 <14`; v14 ships incompatible types).
